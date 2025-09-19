@@ -1,4 +1,4 @@
-# GitDiffViewer
+# Tentacle
 
 A professional Textual-based application for viewing differences between two text files and selectively accepting changes.
 
