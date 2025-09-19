@@ -2,6 +2,24 @@
 
 A professional Textual-based application for viewing differences between two text files and selectively accepting changes.
 
+## Project Structure
+
+The project is organized as a proper Python package:
+
+- `tentacle/` - Main package directory
+  - `main.py` - Entry point module
+  - `git_diff_viewer.py` - Core application logic
+
+## Development
+
+This project uses `uv` for package management and virtual environment handling. You can run the application directly using `uv run tentacle` command.
+
+To run with Python directly:
+```bash
+python -m tentacle <file1> <file2>
+```
+
+
 ## Features
 
 - Side-by-side comparison of two text files
@@ -16,7 +34,13 @@ A professional Textual-based application for viewing differences between two tex
 ## Usage
 
 ```bash
-python app.py <file1> <file2>
+tentacle <file1> <file2>
+```
+
+Or, if running directly with Python:
+
+```bash
+python -m tentacle <file1> <file2>
 ```
 
 ### Controls
@@ -58,10 +82,27 @@ This version features a professional design with:
 pip install textual
 ```
 
-## Example
+Or, if you have `uv` installed:
 
 ```bash
-python app.py sample1.txt sample2.txt
+uv sync
+```
+
+## Example
+
+Using the installed script:
+```bash
+tentacle sample1.txt sample2.txt
+```
+
+Using uv run:
+```bash
+uv run tentacle sample1.txt sample2.txt
+```
+
+Using Python module execution:
+```bash
+python -m tentacle sample1.txt sample2.txt
 ```
 
 The application will display both files side-by-side, with modifications highlighted and accept/reject buttons for each changed line.
