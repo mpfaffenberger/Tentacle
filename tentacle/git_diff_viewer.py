@@ -1,5 +1,4 @@
 import sys
-from pathlib import Path
 from difflib import SequenceMatcher
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button
@@ -9,7 +8,7 @@ from textual.containers import Horizontal, Vertical, Container
 class GitDiffViewer(App):
     """A Textual app for viewing diffs between two text files in a split-screen UI."""
     
-    CSS_PATH = "style.tcss"
+    CSS_PATH = "../style.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("Ctrl+d", "toggle_dark", "Toggle Dark Mode"),
@@ -332,12 +331,7 @@ class GitDiffViewer(App):
             accept_button.add_class("accept-button")
             accept_button.remove_class("accepted-button")
             
-            # Also update reject button if it exists
-            try:
-                reject_button = self.query_one(f"#reject-{line_index}", Button)
-                # No variant update needed as we're not using variants in button creation
-            except:
-                pass
+            # No need to update reject button styling as it doesn't change state
             
     def save_changes(self) -> None:
         """Save accepted changes to file1 and refresh the diff view."""
@@ -386,20 +380,20 @@ class GitDiffViewer(App):
             self.load_files_and_calculate_diff()
             self.refresh_diff_view()
             
+            # Reset accept button styles (reject buttons don't change state)
+            try:
+                buttons = self.query("Button")
+                for button in buttons:
+                    if button.id and button.id.startswith("accept-"):
+                        button.label = "Accept"
+                        button.add_class("accept-button")
+                        button.remove_class("accepted-button")
+            except:
+                # No buttons found
+                pass
+            
             # Show success message
             self.notify("Changes saved successfully to file 1!", severity="information")
             
         except Exception as e:
             self.notify(f"Error saving changes: {e}", severity="error")
-        
-        
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python app.py <file1> <file2>")
-        sys.exit(1)
-        
-    file1_path = sys.argv[1]
-    file2_path = sys.argv[2]
-    
-    app = GitDiffViewer(file1_path, file2_path)
-    app.run()
