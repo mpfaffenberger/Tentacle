@@ -20,10 +20,7 @@ A Textual app for viewing diffs between two text files in a split-screen UI.
 
 ```bash
 # Compare two files and view git status sidebar
-python -m tentacle.main <file1> <file2>
-
-# Or if in the tentacle directory
-python main.py <file1> <file2>
+tentacle <file1> <file2>
 ```
 
 ## Controls

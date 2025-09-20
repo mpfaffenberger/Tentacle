@@ -1,8 +1,4 @@
 import sys
-import os
-
-# Add the parent directory to sys.path so we can import tentacle modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tentacle.git_diff_viewer import GitDiffViewer
 
