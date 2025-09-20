@@ -64,7 +64,7 @@ Header {
     background: $primary 60%;
 }
 
-#file1-header, #file2-header {
+#sidebar-header, #file1-header, #file2-header {
     text-align: center;
     padding: 1;
     background: $primary;
@@ -77,6 +77,13 @@ Header {
     background: $panel-lighten-1;
     color: $text;
     height: 1fr;
+    overflow-y: auto;
+}
+
+#file-tree {
+    height: 1fr;
+    background: $panel-lighten-1;
+    border: solid $panel-darken-1;
     overflow-y: auto;
 }
 
@@ -185,7 +192,51 @@ Footer {
     background: $primary;
 }
 
-#file1-content, #file2-content {
+#file1-content, #file2-content, #file-tree {
     scrollbar-size: 1 1;
     scrollbar-color: $primary;
+}
+
+/* Main content layout with sidebar */
+#main-content {
+    height: 1fr;
+}
+
+#main-content > Vertical {
+    width: 1fr;
+    height: 1fr;
+}
+
+#main-content > Vertical:first-child {
+    width: 30%;
+}
+
+/* Git status colors */
+Tree > .modified {
+    color: $warning;
+    text-style: bold;
+}
+
+Tree > .staged {
+    color: $success;
+    text-style: bold;
+}
+
+Tree > .untracked {
+    color: $accent;
+    text-style: bold;
+}
+
+Tree > .unchanged {
+    color: $text;
+}
+
+Tree > .directory {
+    color: $primary;
+    text-style: bold;
+}
+
+/* Tree node styling */
+Tree > .tree--node {
+    padding: 0 1;
 }

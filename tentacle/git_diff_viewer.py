@@ -1,8 +1,11 @@
 import sys
 from difflib import SequenceMatcher
+from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button
+from textual.widgets import Static, Header, Footer, Button, Tree
 from textual.containers import Horizontal, Vertical, Container
+from textual.widgets.tree import TreeNode
+from tentacle.git_status_sidebar import GitStatusSidebar
 
 
 class GitDiffViewer(App):
@@ -23,10 +26,13 @@ class GitDiffViewer(App):
         self.line_diffs_file1 = []
         self.line_diffs_file2 = []
         self.accepted_changes = []  # Track which changes have been accepted
+        self.git_sidebar = GitStatusSidebar()
+        self.file_tree = None
         
     def on_mount(self) -> None:
         """Load files and calculate diff when app mounts."""
         self.load_files_and_calculate_diff()
+        self.populate_file_tree()
         
         # Populate the file content areas with styled lines
         file1_content = self.query_one("#file1-content", Vertical)
@@ -224,6 +230,10 @@ class GitDiffViewer(App):
         
         yield Horizontal(
             Vertical(
+                Static("File Tree", id="sidebar-header"),
+                Tree("Files", id="file-tree"),
+            ),
+            Vertical(
                 Static(f"Original File: {self.file1_path}", id="file1-header"),
                 Vertical(id="file1-content"),
             ),
@@ -231,6 +241,7 @@ class GitDiffViewer(App):
                 Static(f"Modified File: {self.file2_path}", id="file2-header"),
                 Vertical(id="file2-content"),
             ),
+            id="main-content"
         )
         yield Footer()
         
@@ -397,3 +408,73 @@ class GitDiffViewer(App):
             
         except Exception as e:
             self.notify(f"Error saving changes: {e}", severity="error")
+            
+    def populate_file_tree(self) -> None:
+        """Populate the file tree sidebar with files and their git status."""
+        if not self.git_sidebar.repo:
+            # If not in a git repo, just show a simple file tree
+            self.populate_simple_file_tree()
+            return
+            
+        try:
+            # Get the tree widget
+            tree = self.query_one("#file-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Get file tree with git status
+            file_tree = self.git_sidebar.get_file_tree()
+            
+            # Build tree structure
+            root_nodes = {}
+            
+            for file_path, file_type, git_status in file_tree:
+                # Split path into components
+                parts = file_path.split('/')
+                
+                # Create nodes for each directory level if they don't exist
+                current_nodes = root_nodes
+                current_tree_node = tree.root
+                
+                # Navigate/create intermediate nodes
+                for i, part in enumerate(parts[:-1] if file_type == "file" else parts):
+                    path_key = '/'.join(parts[:i+1])
+                    if path_key not in current_nodes:
+                        # Create directory node
+                        current_tree_node = current_tree_node.add(part, expand=True)
+                        current_nodes[path_key] = current_tree_node
+                    else:
+                        current_tree_node = current_nodes[path_key]
+                
+                # Add the file or last directory node
+                if file_type == "file":
+                    # Add file node with git status as data
+                    label = parts[-1] if parts else file_path
+                    leaf_node = current_tree_node.add_leaf(label, data=git_status)
+                    # Add CSS class based on git status
+                    leaf_node.set_class(True, git_status)
+                else:
+                    # For directories
+                    if file_path not in root_nodes:
+                        label = parts[-1] if parts else file_path
+                        dir_node = current_tree_node.add(label, expand=True)
+                        dir_node.set_class(True, "directory")
+                        root_nodes[file_path] = dir_node
+            
+        except Exception as e:
+            # If we can't populate the tree, that's okay - just continue without it
+            self.populate_simple_file_tree()
+            
+    def populate_simple_file_tree(self) -> None:
+        """Populate a simple file tree without git status when not in a git repo."""
+        try:
+            tree = self.query_one("#file-tree", Tree)
+            tree.clear()
+            
+            # Add the two files being compared
+            tree.root.add_leaf(Path(self.file1_path).name, data="file1")
+            tree.root.add_leaf(Path(self.file2_path).name, data="file2")
+            
+        except Exception:
+            pass

@@ -1,0 +1,2 @@
+This is a test file for git status tracking.
+It will help us verify our sidebar implementation.
