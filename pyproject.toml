@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tentacle"
-version = "0.0.1"
+version = "0.1.0"
 description = "TUI replacement for GitKraken!"
 readme = "README.md"
 requires-python = ">=3.12"
