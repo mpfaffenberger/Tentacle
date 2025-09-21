@@ -54,10 +54,13 @@ class GraphCommitLine(Widget):
     def compose(self) -> ComposeResult:
         """Compose the graph commit line widget."""
         # Create the graph visualization part
-        graph_widget = Static(self.graph_chars, id="graph", classes="info")
+        graph_widget = Static(self.graph_chars, id="graph")
         
-        # Create the commit info part
-        commit_info = Static(f"{self.commit.sha} {self.commit.message}", id="commit-info", classes="info")
+        # Create the commit info part with branch, commit ID, author, and message
+        branch_info = ""
+        if hasattr(self.commit, 'branches') and self.commit.branches:
+            branch_info = f"[{self.commit.branches[0]}] "
+        commit_info = Static(f"{branch_info}{self.commit.sha} {self.commit.author}: {self.commit.message}", id="commit-info")
         
         yield graph_widget
         yield commit_info
