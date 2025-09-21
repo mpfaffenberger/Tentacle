@@ -587,30 +587,35 @@ class GitDiffViewer(App):
     def stage_hunk(self, file_path: str, hunk_index: int) -> None:
         """Stage a specific hunk of a file."""
         try:
-            # For this implementation, we'll stage the entire file
-            # A more advanced implementation would stage only the specific hunk
+            print(f"DEBUG: UI attempting to stage hunk {hunk_index} in {file_path}")
             success = self.git_sidebar.stage_hunk(file_path, hunk_index)
             
             if success:
                 self.notify(f"Staged hunk in {file_path}", severity="information")
+                print(f"DEBUG: Successfully staged hunk, refreshing UI")
+                
+                # Clear any cached diff state
+                if hasattr(self, '_current_displayed_file'):
+                    delattr(self, '_current_displayed_file')
+                if hasattr(self, '_current_displayed_is_staged'):
+                    delattr(self, '_current_displayed_is_staged')
+                
                 self.populate_file_tree()
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
+                
                 if self.current_file:
-                    # Check if the file still has unstaged changes to determine which view to show
-                    file_status = self.git_sidebar.get_file_status(self.current_file)
-                    if file_status == "modified":  # File has both staged and unstaged changes
-                        # Keep showing unstaged view
-                        self.display_file_diff(self.current_file, False, force_refresh=True)
-                    else:
-                        # File is fully staged, show staged view
-                        self.current_is_staged = True
-                        self.display_file_diff(self.current_file, True, force_refresh=True)
+                    # Always stay in the current view after staging a hunk
+                    # This prevents unwanted view switching when staging individual hunks
+                    print(f"DEBUG: Refreshing current view after staging")
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to stage {file_path}", severity="error")
+                print(f"DEBUG: Failed to stage hunk {hunk_index}")
                 
         except Exception as e:
             self.notify(f"Error staging hunk: {e}", severity="error")
+            print(f"DEBUG: Exception in stage_hunk: {e}")
             
     def unstage_hunk(self, file_path: str, hunk_index: int) -> None:
         """Unstage a specific hunk of a file."""
@@ -625,9 +630,8 @@ class GitDiffViewer(App):
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
                 if self.current_file:
-                    # After unstaging, we should show the unstaged view of the file
-                    self.current_is_staged = False
-                    self.display_file_diff(self.current_file, False, force_refresh=True)
+                    # Stay in the current view after unstaging a hunk
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to unstage {file_path}", severity="error")
                 
@@ -637,22 +641,33 @@ class GitDiffViewer(App):
     def discard_hunk(self, file_path: str, hunk_index: int) -> None:
         """Discard changes in a specific hunk of a file."""
         try:
-            # For this implementation, we'll discard all changes in the file
-            # A more advanced implementation would discard only the specific hunk
+            print(f"DEBUG: UI attempting to discard hunk {hunk_index} in {file_path}")
             success = self.git_sidebar.discard_hunk(file_path, hunk_index)
             
             if success:
                 self.notify(f"Discarded hunk in {file_path}", severity="information")
+                print(f"DEBUG: Successfully discarded hunk, refreshing UI")
+                
+                # Clear any cached diff state
+                if hasattr(self, '_current_displayed_file'):
+                    delattr(self, '_current_displayed_file')
+                if hasattr(self, '_current_displayed_is_staged'):
+                    delattr(self, '_current_displayed_is_staged')
+                
                 self.populate_file_tree()
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
+                
                 if self.current_file:
+                    print(f"DEBUG: Refreshing diff view for {self.current_file}")
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to discard changes in {file_path}", severity="error")
+                print(f"DEBUG: Failed to discard hunk {hunk_index}")
                 
         except Exception as e:
             self.notify(f"Error discarding hunk: {e}", severity="error")
+            print(f"DEBUG: Exception in discard_hunk: {e}")
             
     def populate_commit_history(self) -> None:
         """Populate the commit history tab."""
@@ -676,14 +691,18 @@ class GitDiffViewer(App):
             
     def display_file_diff(self, file_path: str, is_staged: bool = False, force_refresh: bool = False) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
+        print(f"DEBUG: display_file_diff called for {file_path}, staged={is_staged}, force_refresh={force_refresh}")
+        
         # Skip if this is the same file we're already displaying (unless force_refresh is True)
         if not force_refresh and hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
+            print(f"DEBUG: Skipping refresh, same file already displayed")
             return
         self.current_is_staged = is_staged
             
         try:
             diff_content = self.query_one("#diff-content", VerticalScroll)
             # Ensure we're starting with a clean slate
+            print(f"DEBUG: Clearing diff content")
             diff_content.remove_children()
             
             # Track which file we're currently displaying
@@ -692,6 +711,7 @@ class GitDiffViewer(App):
             
             # Get file status to determine which buttons to show
             hunks = self.git_sidebar.get_diff_hunks(file_path, staged=is_staged)
+            print(f"DEBUG: Found {len(hunks) if hunks else 0} hunks for display")
             
             if not hunks:
                 diff_content.mount(Static("No changes to display", classes="info"))

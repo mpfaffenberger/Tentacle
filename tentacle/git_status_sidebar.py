@@ -798,7 +798,7 @@ class GitStatusSidebar:
             if hunk_index >= len(hunks):
                 return False
             hunk = hunks[hunk_index]
-            patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
+            patch = self._create_patch_from_hunk(file_path, hunk)
             return self._apply_patch(patch, cached=True, reverse=True)
         except Exception as e:
             print(f"Error in unstage_hunk: {e}")
@@ -807,11 +807,16 @@ class GitStatusSidebar:
     def discard_hunk(self, file_path: str, hunk_index: int) -> bool:
         try:
             hunks = self.get_diff_hunks(file_path, staged=False)
+            print(f"DEBUG: Found {len(hunks)} unstaged hunks for {file_path}")
             if hunk_index >= len(hunks):
+                print(f"DEBUG: Hunk index {hunk_index} out of range")
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
-            return self._apply_patch(patch)
+            print(f"DEBUG: Created reverse patch for discarding hunk {hunk_index}")
+            result = self._apply_patch(patch)
+            print(f"DEBUG: Discard patch apply result: {result}")
+            return result
         except Exception as e:
             print(f"Error in discard_hunk: {e}")
             return False
