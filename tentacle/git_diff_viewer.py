@@ -268,13 +268,13 @@ class GitDiffViewer(App):
             commits = self.git_sidebar.get_commit_history()
             
             for commit in commits:
-                commit_container = Container(
-                    Static(f"[bold]{commit.sha}[/bold]", classes="info"),
-                    Static(commit.message, classes="info"),
-                    Static(f"{commit.author} - {commit.date.strftime('%Y-%m-%d %H:%M')}", classes="info"),
-                    classes="info-container"
-                )
-                history_content.mount(commit_container)
+                # Truncate message to fit line width
+                truncated_message = commit.message
+                if len(truncated_message) > 50:
+                    truncated_message = commit.message[:47] + "..."
+                
+                commit_line = Static(f"{commit.sha} {truncated_message}", classes="info")
+                history_content.mount(commit_line)
                 
         except Exception:
             pass

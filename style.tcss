@@ -199,7 +199,7 @@ TabbedContent > TabPane {
     color: $text;
     width: 100%;
     padding: 0 1;
-    text-align: center;
+    text-align: left;
 }
 
 Footer {
