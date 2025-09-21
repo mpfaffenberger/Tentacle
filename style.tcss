@@ -101,6 +101,7 @@ Header {
     width: 100%;
     border-bottom: solid white;
     margin-bottom: 1;
+    height: auto;
 }
 
 .hunk-header {
@@ -114,6 +115,7 @@ Header {
     color: black;
     width: 100%;
     padding: 0 1;
+    height: auto;
 }
 
 .removed {
@@ -121,12 +123,14 @@ Header {
     color: white;
     width: 100%;
     padding: 0 1;
+    height: auto;
 }
 
 .unchanged {
     background: #00122f;
     width: 100%;
     padding: 0 1;
+    height: auto;
 }
 
 .hunk-buttons {
