@@ -26,6 +26,8 @@ class CommitInfo:
     message: str
     author: str
     date: datetime
+    parents: List[str]  # List of parent commit SHAs
+    branches: List[str]  # List of branches this commit belongs to
     
     def __post_init__(self):
         # Remove the newline at the end of message if present
@@ -547,12 +549,30 @@ class GitStatusSidebar:
             commits = list(self.repo.iter_commits('HEAD'))
             commit_info_list = []
             
+            # Get branch information
+            branch_heads = {}
+            try:
+                for branch in self.repo.heads:
+                    branch_heads[branch.commit.hexsha] = branch.name
+            except:
+                pass  # If we can't get branches, continue without them
+            
             for commit in commits:
+                # Get parent commit SHAs
+                parents = [parent.hexsha[:8] for parent in commit.parents]
+                
+                # Get branches this commit belongs to
+                branches = []
+                if commit.hexsha in branch_heads:
+                    branches.append(branch_heads[commit.hexsha])
+                
                 commit_info = CommitInfo(
                     sha=commit.hexsha[:8],  # Short SHA
                     message=commit.message.strip(),
                     author=commit.author.name,
-                    date=commit.committed_datetime
+                    date=commit.committed_datetime,
+                    parents=parents,
+                    branches=branches
                 )
                 commit_info_list.append(commit_info)
                 

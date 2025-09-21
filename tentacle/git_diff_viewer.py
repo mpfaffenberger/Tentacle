@@ -4,7 +4,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
-from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
+from tentacle.git_status_sidebar import GitStatusSidebar, Hunk, CommitInfo
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -18,6 +18,49 @@ class CommitLine(Static):
         overflow: hidden hidden;
     }
     """
+    
+    
+
+class GraphCommitLine(Widget):
+    """A widget for displaying a commit line with git graph visualization."""
+    
+    DEFAULT_CSS = """
+    GraphCommitLine {
+        layout: horizontal;
+        width: 100%;
+        height: 1;
+    }
+    
+    GraphCommitLine > Static {
+        height: 1;
+    }
+    
+    GraphCommitLine > #graph {
+        width: 15;
+        height: 1;
+    }
+    
+    GraphCommitLine > #commit-info {
+        width: 1fr;
+        height: 1;
+    }
+    """
+    
+    def __init__(self, commit: CommitInfo, graph_chars: str = "", **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.commit = commit
+        self.graph_chars = graph_chars
+    
+    def compose(self) -> ComposeResult:
+        """Compose the graph commit line widget."""
+        # Create the graph visualization part
+        graph_widget = Static(self.graph_chars, id="graph", classes="info")
+        
+        # Create the commit info part
+        commit_info = Static(f"{self.commit.sha} {self.commit.message}", id="commit-info", classes="info")
+        
+        yield graph_widget
+        yield commit_info
 
 class GitDiffViewer(App):
     """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
@@ -274,16 +317,28 @@ class GitDiffViewer(App):
             self.notify(f"Error discarding hunk: {e}", severity="error")
             
     def populate_commit_history(self) -> None:
-        """Populate the commit history tab."""
+        """Populate the commit history tab with git graph visualization."""
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
             
             commits = self.git_sidebar.get_commit_history()
             
-            for commit in commits:
-                # Display full commit message without truncation
-                commit_line = CommitLine(f"{commit.sha} {commit.message}", classes="info")
+            # Simple ASCII git graph visualization
+            # This is a basic implementation - in a real git client, this would be more complex
+            for i, commit in enumerate(commits):
+                # Create a simple graph representation
+                # For now, just show a vertical line for each commit
+                graph_chars = "│ " * (i % 3 + 1)  # Simple pattern
+                
+                # For merge commits, we could show a different character
+                if len(commit.parents) > 1:
+                    graph_chars = "├─" + graph_chars
+                else:
+                    graph_chars = "└─" + graph_chars
+                
+                # Display commit with graph visualization
+                commit_line = GraphCommitLine(commit, graph_chars, classes="info")
                 history_content.mount(commit_line)
                 
         except Exception:
