@@ -148,6 +148,9 @@ class GitDiffViewer(App):
             # Clear existing tree
             tree.clear()
             
+            # Automatically expand the root node
+            tree.root.expand()
+            
             # Get all files in the repository with their statuses
             file_tree = self.git_sidebar.get_file_tree()
             
