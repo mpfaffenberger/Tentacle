@@ -294,13 +294,10 @@ class GitDiffViewer(App):
                 
             # Display each hunk
             for i, hunk in enumerate(hunks):
-                hunk_container = Container(
-                    Static(hunk.header, classes="hunk-header"),
-                    id=f"hunk-{i}",
-                    classes="hunk-container"
-                )
+                # Create all the widgets for this hunk first
+                hunk_widgets = [Static(hunk.header, classes="hunk-header")]
                 
-                # Add lines to the hunk container
+                # Add lines to the hunk widgets list
                 for line in hunk.lines:
                     # Determine line type based on the first character
                     if line.startswith('+'):
@@ -309,7 +306,7 @@ class GitDiffViewer(App):
                         line_widget = Static(line, classes="removed")
                     else:
                         line_widget = Static(line, classes="unchanged")
-                    hunk_container.mount(line_widget)
+                    hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
                 if file_status == "staged":
@@ -324,8 +321,12 @@ class GitDiffViewer(App):
                         Button("Discard", id=f"discard-hunk-{i}-{file_path}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
-                hunk_container.mount(buttons)
+                hunk_widgets.append(buttons)
                 
+                # Create the complete container with all widgets
+                hunk_container = Container(*hunk_widgets, id=f"hunk-{i}", classes="hunk-container")
+                
+                # Mount the complete hunk container
                 diff_content.mount(hunk_container)
                 
         except Exception as e:
