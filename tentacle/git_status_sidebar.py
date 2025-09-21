@@ -1,5 +1,8 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+import re
+import tempfile
+import os
 import git
 from dataclasses import dataclass
 from datetime import datetime
@@ -335,11 +338,12 @@ class GitStatusSidebar:
         except Exception:
             return []
         
-    def get_diff_hunks(self, file_path: str) -> List[Hunk]:
+    def get_diff_hunks(self, file_path: str, staged: bool = False) -> List[Hunk]:
         """Get diff hunks for a specific file.
         
         Args:
             file_path: Path to the file relative to repository root
+            staged: Whether to get staged diff
             
         Returns:
             List of Hunk objects representing the diff hunks
@@ -348,39 +352,31 @@ class GitStatusSidebar:
             return []
             
         try:
-            # Check if file is staged
-            file_status = self.get_file_status(file_path)
-            
-            if file_status == "staged":
-                # Get diff between HEAD and index
-                diff = self.repo.git.diff("HEAD", "--", file_path)
-            elif file_status == "modified":
-                # Get diff between index and working tree
-                diff = self.repo.git.diff("--", file_path)
-            elif file_status == "untracked":
-                # For untracked files, just show the content
-                with open(self.repo_path / file_path, 'r') as f:
-                    content = f.read()
-                lines = content.splitlines()
-                return [Hunk(header="@@ -0,0 +1,@@", lines=lines)]
-            else:
-                # For unchanged files, show current content without diffs
-                with open(self.repo_path / file_path, 'r') as f:
-                    content = f.read()
-                lines = content.splitlines()
-                return [Hunk(header="", lines=lines)]
-                
-            # Parse the diff into hunks
+            diff_cmd = ['--', file_path]
+            if staged:
+                diff_cmd.insert(0, '--cached')
+            diff = self.repo.git.diff(*diff_cmd)
+            if not diff:
+                status = self.get_file_status(file_path)
+                if staged:
+                    return []
+                if status == "untracked":
+                    with (self.repo_path / file_path).open('r') as f:
+                        content = f.read()
+                    lines = ['+' + l for l in content.splitlines()]
+                    return [Hunk("@@ -0,0 +1," + str(len(lines)) + " @@", lines)]
+                elif status == "unchanged":
+                    with (self.repo_path / file_path).open('r') as f:
+                        content = f.read()
+                    lines = content.splitlines()
+                    return [Hunk("", lines)]
+                else:
+                    return []
             hunks = self._parse_diff_into_hunks(diff)
-            
-            # For markdown files, filter out whitespace-only changes
             if file_path.endswith('.md'):
                 hunks = self._filter_whitespace_hunks(hunks)
-                
             return hunks
-            
-        except Exception as e:
-            # If we can't get the diff, return an empty list
+        except Exception:
             return []
         
     def _is_whitespace_only_change(self, old_line: str, new_line: str) -> bool:
@@ -722,3 +718,71 @@ class GitStatusSidebar:
             return True
         except Exception:
             return False
+
+    def _reverse_hunk_header(self, header: str) -> str:
+        match = re.match(r'@@ -(\\d+),(\\d+) \\+(\\d+),(\\d+) @@', header)
+        if match:
+            old_start, old_len, new_start, new_len = map(int, match.groups())
+            return f"@@ -{new_start},{new_len} +{old_start},{old_len} @@"
+        return header
+
+    def _create_patch_from_hunk(self, hunk: Hunk, reverse: bool = False) -> str:
+        if reverse:
+            header = self._reverse_hunk_header(hunk.header)
+            reversed_lines = []
+            for line in hunk.lines:
+                if line.startswith('+'):
+                    reversed_lines.append('-' + line[1:])
+                elif line.startswith('-'):
+                    reversed_lines.append('+' + line[1:])
+                else:
+                    reversed_lines.append(line)
+            lines = [header] + reversed_lines
+        else:
+            lines = [hunk.header] + hunk.lines
+        return '\n'.join(lines) + '\n'
+
+    def _apply_patch(self, patch: str, cached: bool = False, reverse: bool = False, index: bool = False) -> bool:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+            tmp.write(patch)
+            tmp_path = tmp.name
+        args = []
+        if reverse:
+            args.append('-R')
+        if cached:
+            args.append('--cached')
+        if index:
+            args.append('--index')
+        args.append(tmp_path)
+        try:
+            self.repo.git.apply(*args)
+            return True
+        except git.GitCommandError as e:
+            print(f"Error applying patch: {e}")
+            return False
+        finally:
+            os.unlink(tmp_path)
+
+    def stage_hunk(self, file_path: str, hunk_index: int) -> bool:
+        hunks = self.get_diff_hunks(file_path, staged=False)
+        if hunk_index >= len(hunks):
+            return False
+        hunk = hunks[hunk_index]
+        patch = self._create_patch_from_hunk(hunk)
+        return self._apply_patch(patch, cached=True)
+
+    def unstage_hunk(self, file_path: str, hunk_index: int) -> bool:
+        hunks = self.get_diff_hunks(file_path, staged=True)
+        if hunk_index >= len(hunks):
+            return False
+        hunk = hunks[hunk_index]
+        patch = self._create_patch_from_hunk(hunk, reverse=True)
+        return self._apply_patch(patch, index=True)
+
+    def discard_hunk(self, file_path: str, hunk_index: int) -> bool:
+        hunks = self.get_diff_hunks(file_path, staged=False)
+        if hunk_index >= len(hunks):
+            return False
+        hunk = hunks[hunk_index]
+        patch = self._create_patch_from_hunk(hunk, reverse=True)
+        return self._apply_patch(patch)

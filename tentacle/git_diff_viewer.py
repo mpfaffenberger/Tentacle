@@ -144,6 +144,9 @@ class GitDiffViewer(App):
         self.current_file = None
         self.hunks = []
         self.file_tree = None
+        self.current_is_staged = None
+        self._current_displayed_file = None
+        self._current_displayed_is_staged = None
 
     def compose(self) -> ComposeResult:
         """Create the UI layout with three-panel view: file tree, diff view, and commit history."""
@@ -256,7 +259,7 @@ class GitDiffViewer(App):
         if node_data and isinstance(node_data, dict) and "path" in node_data:
             file_path = node_data["path"]
             self.current_file = file_path
-            self.display_file_diff(file_path)
+            self.display_file_diff(file_path, is_staged=False)
             
     def on_staged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle staged tree node selection to display file diffs."""
@@ -265,7 +268,7 @@ class GitDiffViewer(App):
         if node_data and isinstance(node_data, dict) and "path" in node_data:
             file_path = node_data["path"]
             self.current_file = file_path
-            self.display_file_diff(file_path)
+            self.display_file_diff(file_path, is_staged=True)
             
     def on_unstaged_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         """Handle unstaged tree node highlighting to display file diffs."""
@@ -274,7 +277,16 @@ class GitDiffViewer(App):
         if node_data and isinstance(node_data, dict) and "path" in node_data:
             file_path = node_data["path"]
             self.current_file = file_path
-            self.display_file_diff(file_path)
+            self.display_file_diff(file_path, is_staged=False)
+
+    def on_staged_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle staged tree node highlighting to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged=True)
             
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle tree node selection to display file diffs."""
@@ -282,8 +294,10 @@ class GitDiffViewer(App):
         
         if node_data and isinstance(node_data, dict) and "path" in node_data:
             file_path = node_data["path"]
+            status = node_data.get("status", "unchanged")
+            is_staged = (status == "staged")
             self.current_file = file_path
-            self.display_file_diff(file_path)
+            self.display_file_diff(file_path, is_staged)
             
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         """Handle tree node highlighting to display file diffs."""
@@ -291,8 +305,10 @@ class GitDiffViewer(App):
         
         if node_data and isinstance(node_data, dict) and "path" in node_data:
             file_path = node_data["path"]
+            status = node_data.get("status", "unchanged")
+            is_staged = (status == "staged")
             self.current_file = file_path
-            self.display_file_diff(file_path)
+            self.display_file_diff(file_path, is_staged)
             
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events for hunk operations and commit."""
@@ -557,14 +573,15 @@ class GitDiffViewer(App):
         try:
             # For this implementation, we'll stage the entire file
             # A more advanced implementation would stage only the specific hunk
-            success = self.git_sidebar.stage_file(file_path)
+            success = self.git_sidebar.stage_hunk(file_path, hunk_index)
             
             if success:
-                self.notify(f"Staged changes in {file_path}", severity="information")
-                # Refresh the file tree to update styling
+                self.notify(f"Staged hunk in {file_path}", severity="information")
                 self.populate_file_tree()
-                # Refresh the diff view
-                self.display_file_diff(file_path)
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged)
             else:
                 self.notify(f"Failed to stage {file_path}", severity="error")
                 
@@ -576,14 +593,15 @@ class GitDiffViewer(App):
         try:
             # For this implementation, we'll unstage the entire file
             # A more advanced implementation would unstage only the specific hunk
-            success = self.git_sidebar.unstage_file(file_path)
+            success = self.git_sidebar.unstage_hunk(file_path, hunk_index)
             
             if success:
-                self.notify(f"Unstaged changes in {file_path}", severity="information")
-                # Refresh the file tree to update styling
+                self.notify(f"Unstaged hunk in {file_path}", severity="information")
                 self.populate_file_tree()
-                # Refresh the diff view
-                self.display_file_diff(file_path)
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged)
             else:
                 self.notify(f"Failed to unstage {file_path}", severity="error")
                 
@@ -595,14 +613,15 @@ class GitDiffViewer(App):
         try:
             # For this implementation, we'll discard all changes in the file
             # A more advanced implementation would discard only the specific hunk
-            success = self.git_sidebar.discard_file_changes(file_path)
+            success = self.git_sidebar.discard_hunk(file_path, hunk_index)
             
             if success:
-                self.notify(f"Discarded changes in {file_path}", severity="information")
-                # Refresh the file tree to update styling
+                self.notify(f"Discarded hunk in {file_path}", severity="information")
                 self.populate_file_tree()
-                # Refresh the diff view
-                self.display_file_diff(file_path)
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged)
             else:
                 self.notify(f"Failed to discard changes in {file_path}", severity="error")
                 
@@ -629,11 +648,12 @@ class GitDiffViewer(App):
             
 
             
-    def display_file_diff(self, file_path: str) -> None:
+    def display_file_diff(self, file_path: str, is_staged: bool = False) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
         # Skip if this is the same file we're already displaying
-        if hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path:
+        if hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
             return
+        self.current_is_staged = is_staged
             
         try:
             diff_content = self.query_one("#diff-content", VerticalScroll)
@@ -642,10 +662,10 @@ class GitDiffViewer(App):
             
             # Track which file we're currently displaying
             self._current_displayed_file = file_path
+            self._current_displayed_is_staged = is_staged
             
             # Get file status to determine which buttons to show
-            file_status = self.git_sidebar.get_file_status(file_path)
-            hunks = self.git_sidebar.get_diff_hunks(file_path)
+            hunks = self.git_sidebar.get_diff_hunks(file_path, staged=is_staged)
             
             if not hunks:
                 diff_content.mount(Static("No changes to display", classes="info"))
@@ -658,7 +678,7 @@ class GitDiffViewer(App):
                 
                 # Determine if we should apply diff highlighting
                 # Apply highlighting for staged, modified, and untracked files
-                apply_diff_highlighting = file_status in ["staged", "modified", "untracked"]
+                apply_diff_highlighting = True
                 
                 # Add lines to the hunk widgets list
                 for line in hunk.lines:
@@ -682,13 +702,12 @@ class GitDiffViewer(App):
                 # Add appropriate action buttons for the hunk based on file status
                 # Sanitize file path for use in ID (replace invalid characters)
                 sanitized_file_path = file_path.replace('/', '_').replace(' ', '_').replace('.', '_')
-                if file_status == "staged":
+                if is_staged:
                     buttons = Horizontal(
                         Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}", classes="unstage-button"),
-                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
-                else:  # modified or untracked
+                else:
                     buttons = Horizontal(
                         Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}", classes="stage-button"),
                         Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}", classes="discard-button"),
@@ -733,6 +752,8 @@ class GitDiffViewer(App):
                 commit_input.value = ""
                 # Refresh the UI
                 self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
                 self.populate_commit_history()
             else:
                 self.notify("Failed to commit changes", severity="error")
