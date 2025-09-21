@@ -260,18 +260,24 @@ class GitDiffViewer(App):
             self.notify(f"Error discarding hunk: {e}", severity="error")
             
     def populate_commit_history(self) -> None:
-        """Populate the commit history tab."""
+        """Populate the commit history tab with dynamically truncated messages."""
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
             
+            # Get container width for dynamic truncation
+            container_width = history_content.size.width
+            
+            # Reserve space for commit SHA (8 characters) and padding
+            max_message_width = container_width - 12
+            
             commits = self.git_sidebar.get_commit_history()
             
             for commit in commits:
-                # Truncate message to fit line width
+                # Truncate message to fit line width dynamically
                 truncated_message = commit.message
-                if len(truncated_message) > 50:
-                    truncated_message = commit.message[:47] + "..."
+                if len(truncated_message) > max_message_width:
+                    truncated_message = commit.message[:max_message_width-3] + "..."
                 
                 commit_line = Static(f"{commit.sha} {truncated_message}", classes="info")
                 history_content.mount(commit_line)
