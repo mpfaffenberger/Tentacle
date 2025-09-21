@@ -309,15 +309,22 @@ class GitDiffViewer(App):
                 # Create all the widgets for this hunk first
                 hunk_widgets = [Static(hunk.header, classes="hunk-header")]
                 
+                # Determine if we should apply diff highlighting
+                # Apply highlighting for staged, modified, and untracked files
+                apply_diff_highlighting = file_status in ["staged", "modified", "untracked"]
+                
                 # Add lines to the hunk widgets list
-                # Simplified approach: just use red for removed lines, green for added lines
                 for line in hunk.lines:
-                    # Determine line type based on the first character only
-                    if line and line[:1] == '+':  # Only check first character to avoid confusion with content starting with '+'
-                        classes = "added"
-                    elif line and line[:1] == '-':  # Only check first character to avoid confusion with content starting with '-'
-                        classes = "removed"
+                    if apply_diff_highlighting and line:
+                        # Determine line type based on the first character only
+                        if line[:1] == '+':  # Added line
+                            classes = "added"
+                        elif line[:1] == '-':  # Removed line
+                            classes = "removed"
+                        else:
+                            classes = "unchanged"
                     else:
+                        # Disable highlighting altogether if we're not in a diff
                         classes = "unchanged"
                     
                     # Escape any markup characters in the line content
