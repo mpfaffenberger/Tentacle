@@ -72,8 +72,6 @@ class GitDiffViewer(App):
             
 
         
-        # Debug the tree structure
-        self.debug_tree_structure()
         
         
     def action_quit(self) -> None:
