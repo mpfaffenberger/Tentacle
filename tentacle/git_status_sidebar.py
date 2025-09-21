@@ -175,27 +175,87 @@ class GitStatusSidebar:
             except Exception:
                 pass
             
-            # If file_list is still empty, it might be because the walk didn't find anything
-            # Let's make sure we're getting all the files by using git ls-files as a backup
-            if not file_list:
+            # Always use git ls-files as the primary approach since it's more reliable
+            # Only use pathlib for directories as a true fallback
+            try:
+                file_list = []
+                
+                # Get all tracked files
+                tracked_files = self.repo.git.ls_files().splitlines()
+                for file_path in tracked_files:
+                    # Only add files that exist and aren't in .git directory
+                    full_path = self.repo_path / file_path
+                    if full_path.exists() and '.git' not in full_path.parts:
+                        file_list.append((file_path, "file", "unchanged"))
+                
+                # Add untracked files
+                untracked_files = self.repo.untracked_files
+                for file_path in untracked_files:
+                    full_path = self.repo_path / file_path
+                    if full_path.exists() and '.git' not in full_path.parts:
+                        file_list.append((file_path, "file", "untracked"))
+                
+                # Add all directories in the repository (but not .git directories)
                 try:
-                    # Get all tracked files
-                    tracked_files = self.repo.git.ls_files().splitlines()
-                    for file_path in tracked_files:
-                        # Only add files that exist and aren't in .git directory
-                        full_path = self.repo_path / file_path
-                        if full_path.exists() and '.git' not in full_path.parts:
-                            file_list.append((file_path, "file", "unchanged"))
+                    # Use git to get all directories in the repository
+                    ls_tree_dirs = self.repo.git.ls_tree("--full-tree", "-d", "--name-only", "HEAD")
+                    tracked_directories = ls_tree_dirs.splitlines() if ls_tree_dirs else []
                     
-                    # Add untracked files
-                    untracked_files = self.repo.untracked_files
-                    for file_path in untracked_files:
-                        full_path = self.repo_path / file_path
-                        if full_path.exists() and '.git' not in full_path.parts:
-                            file_list.append((file_path, "file", "untracked"))
+                    directories = set()
+                    # Add tracked directories
+                    for dir_path in tracked_directories:
+                        if dir_path and '.git' not in dir_path.split('/'):
+                            directories.add(dir_path)
+                    
+                    # Also check for empty directories that might not be in ls-tree but are in the repo
+                    # Only walk the repository root, not into subdirectories like .venv
+                    for item in self.repo_path.iterdir():
+                        if item.is_dir() and '.git' not in item.parts and item.name != '.venv' and item.name != '.pytest_cache' and item.name != 'dist':
+                            directories.add(item.name)
+                    
+                    # Add directories to file_list
+                    for dir_path in directories:
+                        file_list.append((dir_path, "directory", "unchanged"))
                 except Exception:
-                    # If git ls-files fails, just return empty list
+                    # If git operations fail, just proceed with files only
                     pass
+                    
+            except Exception:
+                # If git ls-files fails, use pathlib walk as fallback
+                try:
+                    file_list = []
+                    
+                    # Handle root directory items
+                    for item in self.repo_path.iterdir():
+                        if not item.exists() or '.git' in item.parts:
+                            continue
+                        
+                        if item.is_dir():
+                            file_list.append((item.name, "directory", "unchanged"))
+                        elif item.is_file():
+                            file_list.append((item.name, "file", "unchanged"))
+                    
+                    # Walk subdirectories
+                    for root, dirs, files in self.repo_path.walk():
+                        # Skip git directory
+                        if '.git' in root.parts:
+                            continue
+                        
+                        # Skip root directory since we already handled it
+                        if root == self.repo_path:
+                            continue
+                            
+                        # Add directories
+                        for dir_name in dirs:
+                            dir_path = (root / dir_name).relative_to(self.repo_path)
+                            file_list.append((str(dir_path), "directory", "unchanged"))
+                            
+                        # Add files
+                        for file_name in files:
+                            file_path = (root / file_name).relative_to(self.repo_path)
+                            file_list.append((str(file_path), "file", "unchanged"))
+                except Exception:
+                    return []
             
             # Get file statuses
             statuses = self.get_file_statuses()
