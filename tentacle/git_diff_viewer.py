@@ -356,7 +356,7 @@ class GitDiffViewer(App):
                     
                     # Apply markdown class specifically for markdown files
                     if lexer == 'markdown':
-                        line_widget.classes += ' markdown'
+                        line_widget.classes = line_widget.classes.union({'markdown'})
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
