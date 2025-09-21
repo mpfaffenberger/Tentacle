@@ -28,10 +28,11 @@ class AnimatedLogo(Widget):
             self.logo_text,
             font="smmono9",
             justify="center",
-            colors=["white", "cyan", "lightblue", "darkblue", "navy"],
+            colors=["cyan", "lightblue", "darkblue", "navy"],
             animate=True,
             horizontal=True,
             fps=20,
+            classes="figlet-widget"
         )
         yield self.figlet_widget
         

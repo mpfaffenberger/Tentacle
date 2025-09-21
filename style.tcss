@@ -38,12 +38,31 @@ Header {
     overflow: auto;
 }
 
-#history-panel {
+#status-panel {
     width: 25%;
     height: 1fr;
     border: solid white;
     background: #00122f;
     overflow: auto;
+}
+
+#unstaged-panel, #staged-panel {
+    height: 33%;
+    border-bottom: solid white;
+    background: #00122f;
+}
+
+#commit-section {
+    height: 33%;
+    background: #00122f;
+}
+
+#unstaged-tree, #staged-tree {
+    height: 1fr;
+    background: #00122f;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
 }
 
 #file-tree {

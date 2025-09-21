@@ -162,16 +162,28 @@ class GitDiffViewer(App):
                 GitDiffHistoryTabs(),
                 id="diff-panel"
             ),
-            # Right panel - Commit functionality only
+            # Right panel - Git status functionality
             Vertical(
-                Static("Staged Files", id="staged-header", classes="panel-header"),
+                # Top pane - Unstaged changes
+                Vertical(
+                    Static("Unstaged Changes", classes="panel-header"),
+                    Tree("Unstaged", id="unstaged-tree"),
+                    id="unstaged-panel"
+                ),
+                # Middle pane - Staged changes
+                Vertical(
+                    Static("Staged Changes", classes="panel-header"),
+                    Tree("Staged", id="staged-tree"),
+                    id="staged-panel"
+                ),
+                # Bottom pane - Commit functionality
                 Vertical(
                     Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
                     Button("Commit", id="commit-button", classes="commit-button"),
                     id="commit-section",
                     classes="commit-section"
                 ),
-                id="history-panel"
+                id="status-panel"
             ),
             id="main-content"
         )
@@ -179,8 +191,9 @@ class GitDiffViewer(App):
         
     def on_mount(self) -> None:
         """Initialize the UI when app mounts."""
-        self.populate_branch_dropdown()
         self.populate_file_tree()
+        self.populate_unstaged_changes()
+        self.populate_staged_changes()
         self.populate_commit_history()
         
         # If no files are selected, show a message in the diff panel
@@ -236,8 +249,44 @@ class GitDiffViewer(App):
         """Toggle dark mode."""
         self.dark = not self.dark
         
+    def on_unstaged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle unstaged tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path)
+            
+    def on_staged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle staged tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path)
+            
+    def on_unstaged_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle unstaged tree node highlighting to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path)
+            
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path)
+            
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle tree node highlighting to display file diffs."""
         node_data = event.node.data
         
         if node_data and isinstance(node_data, dict) and "path" in node_data:
@@ -376,6 +425,131 @@ class GitDiffViewer(App):
                 diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
             except Exception:
                 # If we can't even show the error, that's okay - just continue without it
+                pass
+
+    def populate_unstaged_changes(self) -> None:
+        """Populate the unstaged changes tree in the right sidebar."""
+        if not self.git_sidebar.repo:
+            return
+            
+        try:
+            # Get the unstaged tree widget
+            tree = self.query_one("#unstaged-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Automatically expand the root node
+            tree.root.expand()
+            
+            # Get unstaged files (modified and untracked)
+            unstaged_files = self.git_sidebar.get_files_with_unstaged_changes()
+            
+            # Sort unstaged_files so directories are processed first
+            unstaged_files.sort()
+            
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
+            # Add unstaged files to tree with directory structure
+            for file_path in unstaged_files:
+                parts = file_path.split('/')
+                file_name = parts[-1]
+                
+                # Determine file status
+                if file_path in self.git_sidebar.get_untracked_files():
+                    status = "untracked"
+                else:
+                    status = "modified"
+                
+                # Build intermediate directory nodes as needed
+                for i in range(len(parts) - 1):
+                    parent_path = "/".join(parts[:i])
+                    current_path = "/".join(parts[:i+1])
+                    
+                    # Create node if it doesn't exist
+                    if current_path not in directory_nodes:
+                        parent_node = directory_nodes[parent_path]
+                        new_node = parent_node.add(parts[i], expand=True)
+                        new_node.label.stylize("bold blue")  # Color directories blue
+                        directory_nodes[current_path] = new_node
+                
+                # Add file as leaf node under the appropriate directory
+                parent_dir_path = "/".join(parts[:-1])
+                parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                
+                leaf_node = parent_node.add_leaf(file_name, data={"path": file_path, "status": status})
+                
+                # Apply styling based on status
+                if status == "modified":
+                    leaf_node.label.stylize("bold red")
+                else:  # untracked
+                    leaf_node.label.stylize("bold purple")
+                
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", VerticalScroll)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating unstaged changes: {e}", classes="error"))
+            except Exception:
+                pass
+
+    def populate_staged_changes(self) -> None:
+        """Populate the staged changes tree in the right sidebar."""
+        if not self.git_sidebar.repo:
+            return
+            
+        try:
+            # Get the staged tree widget
+            tree = self.query_one("#staged-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Automatically expand the root node
+            tree.root.expand()
+            
+            # Get staged files
+            staged_files = self.git_sidebar.get_staged_files()
+            
+            # Sort staged_files so directories are processed first
+            staged_files.sort()
+            
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
+            # Add staged files with directory structure
+            for file_path in staged_files:
+                parts = file_path.split('/')
+                file_name = parts[-1]
+                
+                # Build intermediate directory nodes as needed
+                for i in range(len(parts) - 1):
+                    parent_path = "/".join(parts[:i])
+                    current_path = "/".join(parts[:i+1])
+                    
+                    # Create node if it doesn't exist
+                    if current_path not in directory_nodes:
+                        parent_node = directory_nodes[parent_path]
+                        new_node = parent_node.add(parts[i], expand=True)
+                        new_node.label.stylize("bold blue")  # Color directories blue
+                        directory_nodes[current_path] = new_node
+                
+                # Add file as leaf node under the appropriate directory
+                parent_dir_path = "/".join(parts[:-1])
+                parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                
+                leaf_node = parent_node.add_leaf(file_name, data={"path": file_path, "status": "staged"})
+                leaf_node.label.stylize("bold green")
+                
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", VerticalScroll)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating staged changes: {e}", classes="error"))
+            except Exception:
                 pass
             
     def stage_hunk(self, file_path: str, hunk_index: int) -> None:

@@ -79,15 +79,48 @@ class GitStatusSidebar:
             statuses[file_path] = "untracked"
             
         return statuses
+            
+    def get_untracked_files(self) -> List[str]:
+        """Get list of untracked files in the repository.
+        
+        Returns:
+            List of file paths that are untracked
+        """
+        if not self.repo:
+            return []
+            
+        return self.repo.untracked_files
+        
+    def get_files_with_unstaged_changes(self) -> List[str]:
+        """Get list of files with unstaged changes (modified and untracked).
+        
+        Returns:
+            List of file paths that have unstaged changes
+        """
+        if not self.repo:
+            return []
+            
+        statuses = self.get_file_statuses()
+        unstaged_files = []
+        
+        for file_path, status in statuses.items():
+            if status in ["modified", "untracked"]:
+                unstaged_files.append(file_path)
+                
+        return unstaged_files
         
     def get_staged_files(self) -> List[str]:
-        """Get a list of staged files.
+        """Get list of staged files in the repository.
         
         Returns:
             List of file paths that are staged
         """
         if not self.repo:
             return []
+            
+        # Get staged changes
+        staged_files = self.repo.index.diff("HEAD")
+        return [diff.b_path for diff in staged_files]
             
         try:
             staged_files = self.repo.index.diff("HEAD")
@@ -107,6 +140,38 @@ class GitStatusSidebar:
         try:
             unstaged_files = self.repo.index.diff(None)
             return [diff.b_path for diff in unstaged_files]
+        except Exception:
+            return []
+            
+    def get_files_with_unstaged_changes(self) -> List[str]:
+        """Get a list of files that have unstaged changes.
+        
+        Returns:
+            List of file paths that have unstaged changes (modified or untracked)
+        """
+        if not self.repo:
+            return []
+            
+        try:
+            # Get modified files
+            unstaged_files = self.repo.index.diff(None)
+            modified_files = [diff.b_path for diff in unstaged_files]
+            
+            # Add untracked files
+            untracked_files = self.repo.untracked_files
+            
+            # Combine both lists
+            all_unstaged = modified_files + untracked_files
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            result = []
+            for file_path in all_unstaged:
+                if file_path not in seen:
+                    seen.add(file_path)
+                    result.append(file_path)
+            
+            return result
         except Exception:
             return []
             
