@@ -353,6 +353,10 @@ class GitDiffViewer(App):
                         # Escape any markup characters in the line content
                         escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
                         line_widget = Static(escaped_line, classes=classes)
+                    
+                    # Apply markdown class specifically for markdown files
+                    if lexer == 'markdown':
+                        line_widget.classes += ' markdown'
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
