@@ -342,9 +342,8 @@ class GitDiffViewer(App):
                         # Extract the actual content (remove the +/- prefix for syntax highlighting)
                         content = line[1:] if line.startswith(('+', '-')) else line
                         try:
-                            # Create Rich syntax object with background color matching the palette
-                            # Use a simple theme that matches our color scheme
-                            syntax = RichSyntax(content, lexer, theme="ansi_dark", word_wrap=False, background_color="#222222")
+                            # Create Rich syntax object
+                            syntax = RichSyntax(content, lexer, theme="monokai", word_wrap=False)
                             line_widget = Static(syntax, classes=classes)
                         except Exception:
                             # Fallback to plain text if syntax highlighting fails
