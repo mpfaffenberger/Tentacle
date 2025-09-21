@@ -534,12 +534,9 @@ class GitStatusSidebar:
         except Exception:
             return False
             
-    def get_commit_history(self, max_commits: int = 20) -> List[CommitInfo]:
+    def get_commit_history(self) -> List[CommitInfo]:
         """Get commit history.
         
-        Args:
-            max_commits: Maximum number of commits to retrieve
-            
         Returns:
             List of CommitInfo objects
         """
@@ -547,7 +544,7 @@ class GitStatusSidebar:
             return []
             
         try:
-            commits = list(self.repo.iter_commits('HEAD', max_count=max_commits))
+            commits = list(self.repo.iter_commits('HEAD'))
             commit_info_list = []
             
             for commit in commits:
