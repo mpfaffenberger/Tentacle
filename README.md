@@ -20,7 +20,10 @@ A Textual app for viewing git repository file tree and git diffs in a split-scre
 
 ```bash
 # Run the tentacle app with an optional repository path
-tentacle [repo_path]
+uv run tentacle [repo_path]
+
+# Or run directly with Python module syntax
+uv run python -m tentacle.main [repo_path]
 ```
 
 ## Controls
