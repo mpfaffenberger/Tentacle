@@ -160,7 +160,7 @@ class GitDiffViewer(App):
                         if current_path not in directory_nodes:
                             parent_node = directory_nodes[parent_path]
                             new_node = parent_node.add(parts[i], expand=True)
-                            new_node.label.stylize("directory")
+                            new_node.label.stylize("bold blue")  # Color directories blue
                             directory_nodes[current_path] = new_node
                 
                 # For files, add as leaf node under the appropriate directory
@@ -170,17 +170,16 @@ class GitDiffViewer(App):
                     parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
                     
                     leaf_node = parent_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
-                    leaf_node.label.stylize(git_status)
+                    # Apply specific text colors based on git status
+                    if git_status == "staged":
+                        leaf_node.label.stylize("bold green")
+                    elif git_status == "modified":
+                        leaf_node.label.stylize("bold red")
+                    elif git_status == "untracked":
+                        leaf_node.label.stylize("bold purple")
+                    else:  # unchanged
+                        leaf_node.label.stylize("default")
                 
-        except Exception as e:
-            # Show error in diff panel
-            try:
-                diff_content = self.query_one("#diff-content", Vertical)
-                diff_content.remove_children()
-                diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
-            except Exception:
-                # If we can't even show the error, that's okay - just continue without it
-                pass
         except Exception as e:
             # Show error in diff panel
             try:
