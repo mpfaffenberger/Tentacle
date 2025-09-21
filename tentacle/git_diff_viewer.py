@@ -310,7 +310,7 @@ class GitDiffViewer(App):
                 
                 # Add appropriate action buttons for the hunk based on file status
                 # Sanitize file path for use in ID (replace invalid characters)
-                sanitized_file_path = file_path.replace('/', '_').replace(' ', '_')
+                sanitized_file_path = file_path.replace('/', '_').replace(' ', '_').replace('.', '_')
                 if file_status == "staged":
                     buttons = Horizontal(
                         Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}", classes="unstage-button"),
