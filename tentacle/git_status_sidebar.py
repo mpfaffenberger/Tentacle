@@ -296,14 +296,12 @@ class GitStatusSidebar:
                 # For untracked files, just show the content
                 with open(self.repo_path / file_path, 'r') as f:
                     content = f.read()
-                # For untracked files, just show the content
                 lines = content.splitlines()
                 return [Hunk(header="@@ -0,0 +1,@@", lines=lines)]
             else:
                 # For unchanged files, show current content without diffs
                 with open(self.repo_path / file_path, 'r') as f:
                     content = f.read()
-                # For unchanged files, show current content without diffs
                 lines = content.splitlines()
                 return [Hunk(header="", lines=lines)]
                 
