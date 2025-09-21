@@ -300,12 +300,14 @@ class GitDiffViewer(App):
                 # Add lines to the hunk widgets list
                 for line in hunk.lines:
                     # Determine line type based on the first character
+                    # Escape any markup characters in the line content
+                    escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
                     if line.startswith('+'):
-                        line_widget = Static(line, classes="added")
+                        line_widget = Static(escaped_line, classes="added")
                     elif line.startswith('-'):
-                        line_widget = Static(line, classes="removed")
+                        line_widget = Static(escaped_line, classes="removed")
                     else:
-                        line_widget = Static(line, classes="unchanged")
+                        line_widget = Static(escaped_line, classes="unchanged")
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
