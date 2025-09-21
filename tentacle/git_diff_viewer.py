@@ -1,10 +1,11 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
+from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from datetime import datetime
+from textual.widget import Widget
 
 
 class GitDiffViewer(App):
@@ -35,16 +36,13 @@ class GitDiffViewer(App):
                 Tree("Files", id="file-tree"),
                 id="sidebar"
             ),
-            # Center panel - Diff view
+            # Center panel - Tabbed diff view and commit history
             Vertical(
-                Static("Diff View", id="diff-header"),
-                VerticalScroll(id="diff-content"),
+                GitDiffHistoryTabs(),
                 id="diff-panel"
             ),
-            # Right panel - Commit history and commit functionality
+            # Right panel - Commit functionality only
             Vertical(
-                Static("Commit History", id="history-header"),
-                VerticalScroll(id="history-content"),
                 Vertical(
                     Label("Commit Message:"),
                     Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
@@ -71,7 +69,7 @@ class GitDiffViewer(App):
         except Exception:
             pass
         
-        # Ensure the history panel has content to test scrolling
+        # Ensure the history tab has content to test scrolling
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             if not history_content.children:
@@ -263,7 +261,7 @@ class GitDiffViewer(App):
             self.notify(f"Error discarding hunk: {e}", severity="error")
             
     def populate_commit_history(self) -> None:
-        """Populate the commit history panel."""
+        """Populate the commit history tab."""
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
@@ -387,3 +385,15 @@ class GitDiffViewer(App):
                 
         except Exception as e:
             self.notify(f"Error committing changes: {e}", severity="error")
+
+
+class GitDiffHistoryTabs(Widget):
+    """A widget that contains tabbed diff view and commit history."""
+    
+    def compose(self) -> ComposeResult:
+        """Create the tabbed content with diff view and commit history tabs."""
+        with TabbedContent():
+            with TabPane("Diff View"):
+                yield VerticalScroll(id="diff-content")
+            with TabPane("Commit History"):
+                yield VerticalScroll(id="history-content")

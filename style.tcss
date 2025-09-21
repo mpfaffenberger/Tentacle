@@ -12,7 +12,7 @@ Header {
     text-style: bold;
 }
 
-#sidebar-header, #diff-header, #history-header {
+#sidebar-header, #diff-header {
     text-align: center;
     padding: 1;
     background: $primary;
