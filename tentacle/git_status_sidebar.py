@@ -284,7 +284,7 @@ class GitStatusSidebar:
             
         try:
             # Check if file is staged
-            file_status = self._get_file_status(file_path)
+            file_status = self.get_file_status(file_path)
             
             if file_status == "staged":
                 # Get diff between HEAD and index
