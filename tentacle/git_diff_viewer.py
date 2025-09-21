@@ -10,6 +10,7 @@ from datetime import datetime
 class GitDiffViewer(App):
     """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
     
+    TITLE = "Tentacle"
     CSS_PATH = "../style.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -67,6 +68,14 @@ class GitDiffViewer(App):
             diff_content = self.query_one("#diff-content", VerticalScroll)
             if not diff_content.children:
                 diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
+        except Exception:
+            pass
+        
+        # Ensure the history panel has content to test scrolling
+        try:
+            history_content = self.query_one("#history-content", VerticalScroll)
+            if not history_content.children:
+                history_content.mount(Static("No commit history available", classes="info"))
         except Exception:
             pass
 
@@ -256,7 +265,7 @@ class GitDiffViewer(App):
     def populate_commit_history(self) -> None:
         """Populate the commit history panel."""
         try:
-            history_content = self.query_one("#history-content", Vertical)
+            history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
             
             commits = self.git_sidebar.get_commit_history()

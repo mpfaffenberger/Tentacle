@@ -25,6 +25,7 @@ Header {
     height: 1fr;
     border: solid white;
     background: #00122f;
+    overflow: auto;
 }
 
 #diff-panel {
@@ -32,6 +33,7 @@ Header {
     height: 1fr;
     border: solid white;
     background: #00122f;
+    overflow: auto;
 }
 
 #history-panel {
@@ -39,21 +41,25 @@ Header {
     height: 1fr;
     border: solid white;
     background: #00122f;
+    overflow: auto;
 }
 
 #file-tree {
     height: 1fr;
     background: #00122f;
     overflow-y: auto;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
 }
 
 #diff-content {
     height: 1fr;
+    overflow-y: auto;
 }
 
 #history-content {
     height: 1fr;
-    overflow-y: scroll;
+    overflow-y: auto;
 }
 
 /* Commit section styling */
@@ -98,7 +104,7 @@ Header {
 }
 
 .hunk-header {
-    background: $primary 20%;
+    background: #003366 20%;
     text-style: bold;
     padding: 0 1;
 }
@@ -176,17 +182,7 @@ Header {
 
 Footer {
     color: $text;
-    background: $primary;
-}
-
-#file-tree {
-    scrollbar-size: 1 1;
-    scrollbar-color: $primary;
-}
-
-#diff-content, #history-content {
-    scrollbar-size: 1 1;
-    scrollbar-color: $primary;
+    background: #003366;
 }
 
 /* Git status colors in tree */
@@ -210,11 +206,11 @@ Tree > .unchanged {
 }
 
 Tree > .directory {
-    color: $primary;
+    color: #003366;
     text-style: bold;
 }
 
-/* Tree node styling */
 Tree > .tree--node {
     padding: 0 1;
+    background: #00122f;
 }
