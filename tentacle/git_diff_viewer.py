@@ -6,7 +6,18 @@ from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from textual.widget import Widget
+from textual.widgets import Static
 
+class CommitLine(Static):
+    """A widget for displaying a commit line with SHA and message."""
+    
+    DEFAULT_CSS = """
+    CommitLine {
+        width: 100%;
+        height: auto;
+        overflow: hidden hidden;
+    }
+    """
 
 class GitDiffViewer(App):
     """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
@@ -260,26 +271,16 @@ class GitDiffViewer(App):
             self.notify(f"Error discarding hunk: {e}", severity="error")
             
     def populate_commit_history(self) -> None:
-        """Populate the commit history tab with dynamically truncated messages."""
+        """Populate the commit history tab."""
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
             
-            # Get container width for dynamic truncation
-            container_width = history_content.size.width
-            
-            # Reserve space for commit SHA (8 characters) and padding
-            max_message_width = container_width - 12
-            
             commits = self.git_sidebar.get_commit_history()
             
             for commit in commits:
-                # Truncate message to fit line width dynamically
-                truncated_message = commit.message
-                if len(truncated_message) > max_message_width:
-                    truncated_message = commit.message[:max_message_width-3] + "..."
-                
-                commit_line = Static(f"{commit.sha} {truncated_message}", classes="info")
+                # Display full commit message without truncation
+                commit_line = CommitLine(f"{commit.sha} {commit.message}", classes="info")
                 history_content.mount(commit_line)
                 
         except Exception:
