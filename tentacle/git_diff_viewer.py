@@ -1,8 +1,8 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
-from rich.syntax import Syntax as RichSyntax
-from textual.containers import Horizontal, Vertical, Container
+
+from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from datetime import datetime
@@ -36,7 +36,7 @@ class GitDiffViewer(App):
                 id="sidebar"
             ),
             # Center panel - Diff view
-            Vertical(
+            VerticalScroll(
                 Static("Diff View", id="diff-header"),
                 Vertical(id="diff-content"),
                 id="diff-panel"
@@ -70,10 +70,7 @@ class GitDiffViewer(App):
                 diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
         except Exception:
             pass
-            
 
-        
-        
         
     def action_quit(self) -> None:
         """Quit the application with a message."""
@@ -306,28 +303,8 @@ class GitDiffViewer(App):
                 # Create all the widgets for this hunk first
                 hunk_widgets = [Static(hunk.header, classes="hunk-header")]
                 
-                # Create lexer mapping for syntax highlighting
-                lexer_mapping = {
-                    '.py': 'python',
-                    '.md': 'markdown',
-                    '.js': 'javascript',
-                    '.ts': 'typescript',
-                    '.jsx': 'javascript',
-                    '.tsx': 'typescript',
-                    '.html': 'html',
-                    '.css': 'css',
-                    '.json': 'json',
-                    '.yml': 'yaml',
-                    '.yaml': 'yaml',
-                    '.toml': 'toml',
-                    '.txt': '',  # No syntax highlighting for plain text
-                }
-                
-                # Get file extension
-                file_extension = Path(file_path).suffix.lower()
-                lexer = lexer_mapping.get(file_extension, '')
-                
                 # Add lines to the hunk widgets list
+                # Simplified approach: just use red for removed lines, green for added lines
                 for line in hunk.lines:
                     # Determine line type based on the first character
                     if line.startswith('+'):
@@ -337,26 +314,9 @@ class GitDiffViewer(App):
                     else:
                         classes = "unchanged"
                     
-                    # Use syntax highlighting if we have a lexer and line is not empty
-                    if lexer and line.strip():
-                        # Extract the actual content (remove the +/- prefix for syntax highlighting)
-                        content = line[1:] if line.startswith(('+', '-')) else line
-                        try:
-                            # Create Rich syntax object
-                            syntax = RichSyntax(content, lexer, theme="monokai", word_wrap=False)
-                            line_widget = Static(syntax, classes=classes)
-                        except Exception:
-                            # Fallback to plain text if syntax highlighting fails
-                            escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
-                            line_widget = Static(escaped_line, classes=classes)
-                    else:
-                        # Escape any markup characters in the line content
-                        escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
-                        line_widget = Static(escaped_line, classes=classes)
-                    
-                    # Apply markdown class specifically for markdown files
-                    if lexer == 'markdown':
-                        line_widget.classes = line_widget.classes.union({'markdown'})
+                    # Escape any markup characters in the line content
+                    escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
+                    line_widget = Static(escaped_line, classes=classes)
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
