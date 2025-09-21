@@ -368,9 +368,9 @@ class GitStatusSidebar:
                 line = hunk.lines[i]
                 
                 # Handle diff lines
-                if line[:1] == '-':  # Only check first character to avoid confusion with content starting with '-'
+                if line and line[:1] == '-':  # Only check first character to avoid confusion with content starting with '-'
                     # Check if there's a corresponding addition line
-                    if i + 1 < len(hunk.lines) and hunk.lines[i + 1][:1] == '+':  # Only check first character
+                    if i + 1 < len(hunk.lines) and hunk.lines[i + 1] and hunk.lines[i + 1][:1] == '+':  # Only check first character
                         next_line = hunk.lines[i + 1]
                         
                         # Check if they're only whitespace different
@@ -386,9 +386,9 @@ class GitStatusSidebar:
                     else:
                         filtered_lines.append(line)
                         i += 1
-                elif line[:1] == '+':  # Only check first character to avoid confusion with content starting with '+'
+                elif line and line[:1] == '+':  # Only check first character to avoid confusion with content starting with '+'
                     # Check if there's a corresponding removal line
-                    if i > 0 and hunk.lines[i - 1][:1] == '-':  # Only check first character
+                    if i > 0 and hunk.lines[i - 1] and hunk.lines[i - 1][:1] == '-':  # Only check first character
                         # This line was already processed with the previous line, skip it
                         i += 1
                         continue

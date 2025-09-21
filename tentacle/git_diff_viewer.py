@@ -313,9 +313,9 @@ class GitDiffViewer(App):
                 # Simplified approach: just use red for removed lines, green for added lines
                 for line in hunk.lines:
                     # Determine line type based on the first character only
-                    if line[:1] == '+':  # Only check first character to avoid confusion with content starting with '+'
+                    if line and line[:1] == '+':  # Only check first character to avoid confusion with content starting with '+'
                         classes = "added"
-                    elif line[:1] == '-':  # Only check first character to avoid confusion with content starting with '-'
+                    elif line and line[:1] == '-':  # Only check first character to avoid confusion with content starting with '-'
                         classes = "removed"
                     else:
                         classes = "unchanged"
