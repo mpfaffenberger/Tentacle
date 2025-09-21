@@ -50,6 +50,7 @@ Header {
 #diff-content {
     height: 1fr;
     overflow-y: auto;
+    overflow-x: auto;
 }
 
 #history-content {
