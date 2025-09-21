@@ -14,7 +14,7 @@ class CommitLine(Static):
     DEFAULT_CSS = """
     CommitLine {
         width: 100%;
-        height: auto;
+        height: 1;
         overflow: hidden hidden;
     }
     """
