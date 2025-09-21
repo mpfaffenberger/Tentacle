@@ -310,6 +310,17 @@ class GitDiffViewer(App):
             self.current_file = file_path
             self.display_file_diff(file_path, is_staged)
             
+    def _reverse_sanitize_path(self, sanitized_path: str) -> str:
+        """Reverse the sanitization of a file path.
+        
+        Args:
+            sanitized_path: The sanitized path with encoded characters
+            
+        Returns:
+            The original file path
+        """
+        return sanitized_path.replace('__SLASH__', '/').replace('__SPACE__', ' ').replace('__DOT__', '.')
+        
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events for hunk operations and commit."""
         button_id = event.button.id
@@ -319,7 +330,8 @@ class GitDiffViewer(App):
             parts = button_id.split("-", 3)
             if len(parts) == 4:
                 hunk_index = int(parts[2])
-                file_path = parts[3]
+                sanitized_file_path = parts[3]
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.stage_hunk(file_path, hunk_index)
                 
         elif button_id.startswith("unstage-hunk-"):
@@ -327,7 +339,8 @@ class GitDiffViewer(App):
             parts = button_id.split("-", 3)
             if len(parts) == 4:
                 hunk_index = int(parts[2])
-                file_path = parts[3]
+                sanitized_file_path = parts[3]
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.unstage_hunk(file_path, hunk_index)
                 
         elif button_id.startswith("discard-hunk-"):
@@ -335,7 +348,8 @@ class GitDiffViewer(App):
             parts = button_id.split("-", 3)
             if len(parts) == 4:
                 hunk_index = int(parts[2])
-                file_path = parts[3]
+                sanitized_file_path = parts[3]
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.discard_hunk(file_path, hunk_index)
                 
         elif button_id == "commit-button":
@@ -698,8 +712,8 @@ class GitDiffViewer(App):
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
-                # Sanitize file path for use in ID (replace invalid characters)
-                sanitized_file_path = file_path.replace('/', '_').replace(' ', '_').replace('.', '_')
+                # Sanitize file path for use in ID (replace invalid characters with reversible encodings)
+                sanitized_file_path = file_path.replace('/', '__SLASH__').replace(' ', '__SPACE__').replace('.', '__DOT__')
                 if is_staged:
                     buttons = Horizontal(
                         Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}", classes="unstage-button"),

@@ -720,13 +720,16 @@ class GitStatusSidebar:
             return False
 
     def _reverse_hunk_header(self, header: str) -> str:
-        match = re.match(r'@@ -(\\d+),(\\d+) \\+(\\d+),(\\d+) @@', header)
+        match = re.match(r'@@ -(\d+),(\d+) \+(\d+),(\d+) @@', header)
         if match:
             old_start, old_len, new_start, new_len = map(int, match.groups())
             return f"@@ -{new_start},{new_len} +{old_start},{old_len} @@"
         return header
 
-    def _create_patch_from_hunk(self, hunk: Hunk, reverse: bool = False) -> str:
+    def _create_patch_from_hunk(self, file_path: str, hunk: Hunk, reverse: bool = False) -> str:
+        # Create a proper unified diff header
+        diff_header = f"--- a/{file_path}\n+++ b/{file_path}\n"
+        
         if reverse:
             header = self._reverse_hunk_header(hunk.header)
             reversed_lines = []
@@ -740,7 +743,10 @@ class GitStatusSidebar:
             lines = [header] + reversed_lines
         else:
             lines = [hunk.header] + hunk.lines
-        return '\n'.join(lines) + '\n'
+            
+        # Combine the diff header and hunk content
+        patch_content = diff_header + '\n'.join(lines) + '\n'
+        return patch_content
 
     def _apply_patch(self, patch: str, cached: bool = False, reverse: bool = False, index: bool = False) -> bool:
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
@@ -758,31 +764,53 @@ class GitStatusSidebar:
             self.repo.git.apply(*args)
             return True
         except git.GitCommandError as e:
-            print(f"Error applying patch: {e}")
+            # More specific error handling for git apply
+            error_msg = str(e)
+            if "error: patch failed" in error_msg:
+                print(f"Patch failed for file {file_path if 'file_path' in locals() else 'unknown'}: {error_msg}")
+            elif "error: unable to write" in error_msg:
+                print(f"Unable to write patch for file {file_path if 'file_path' in locals() else 'unknown'}: {error_msg}")
+            else:
+                print(f"Git command error applying patch: {error_msg}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error applying patch: {e}")
             return False
         finally:
             os.unlink(tmp_path)
 
     def stage_hunk(self, file_path: str, hunk_index: int) -> bool:
-        hunks = self.get_diff_hunks(file_path, staged=False)
-        if hunk_index >= len(hunks):
+        try:
+            hunks = self.get_diff_hunks(file_path, staged=False)
+            if hunk_index >= len(hunks):
+                return False
+            hunk = hunks[hunk_index]
+            patch = self._create_patch_from_hunk(file_path, hunk)
+            return self._apply_patch(patch, cached=True)
+        except Exception as e:
+            print(f"Error in stage_hunk: {e}")
             return False
-        hunk = hunks[hunk_index]
-        patch = self._create_patch_from_hunk(hunk)
-        return self._apply_patch(patch, cached=True)
 
     def unstage_hunk(self, file_path: str, hunk_index: int) -> bool:
-        hunks = self.get_diff_hunks(file_path, staged=True)
-        if hunk_index >= len(hunks):
+        try:
+            hunks = self.get_diff_hunks(file_path, staged=True)
+            if hunk_index >= len(hunks):
+                return False
+            hunk = hunks[hunk_index]
+            patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
+            return self._apply_patch(patch, index=True)
+        except Exception as e:
+            print(f"Error in unstage_hunk: {e}")
             return False
-        hunk = hunks[hunk_index]
-        patch = self._create_patch_from_hunk(hunk, reverse=True)
-        return self._apply_patch(patch, index=True)
 
     def discard_hunk(self, file_path: str, hunk_index: int) -> bool:
-        hunks = self.get_diff_hunks(file_path, staged=False)
-        if hunk_index >= len(hunks):
+        try:
+            hunks = self.get_diff_hunks(file_path, staged=False)
+            if hunk_index >= len(hunks):
+                return False
+            hunk = hunks[hunk_index]
+            patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
+            return self._apply_patch(patch)
+        except Exception as e:
+            print(f"Error in discard_hunk: {e}")
             return False
-        hunk = hunks[hunk_index]
-        patch = self._create_patch_from_hunk(hunk, reverse=True)
-        return self._apply_patch(patch)
