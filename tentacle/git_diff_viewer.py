@@ -1,6 +1,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
+from rich.syntax import Syntax as RichSyntax
 from textual.containers import Horizontal, Vertical, Container
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
@@ -305,17 +306,53 @@ class GitDiffViewer(App):
                 # Create all the widgets for this hunk first
                 hunk_widgets = [Static(hunk.header, classes="hunk-header")]
                 
+                # Create lexer mapping for syntax highlighting
+                lexer_mapping = {
+                    '.py': 'python',
+                    '.md': 'markdown',
+                    '.js': 'javascript',
+                    '.ts': 'typescript',
+                    '.jsx': 'javascript',
+                    '.tsx': 'typescript',
+                    '.html': 'html',
+                    '.css': 'css',
+                    '.json': 'json',
+                    '.yml': 'yaml',
+                    '.yaml': 'yaml',
+                    '.toml': 'toml',
+                    '.txt': '',  # No syntax highlighting for plain text
+                }
+                
+                # Get file extension
+                file_extension = Path(file_path).suffix.lower()
+                lexer = lexer_mapping.get(file_extension, '')
+                
                 # Add lines to the hunk widgets list
                 for line in hunk.lines:
                     # Determine line type based on the first character
-                    # Escape any markup characters in the line content
-                    escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
                     if line.startswith('+'):
-                        line_widget = Static(escaped_line, classes="added")
+                        classes = "added"
                     elif line.startswith('-'):
-                        line_widget = Static(escaped_line, classes="removed")
+                        classes = "removed"
                     else:
-                        line_widget = Static(escaped_line, classes="unchanged")
+                        classes = "unchanged"
+                    
+                    # Use syntax highlighting if we have a lexer and line is not empty
+                    if lexer and line.strip():
+                        # Extract the actual content (remove the +/- prefix for syntax highlighting)
+                        content = line[1:] if line.startswith(('+', '-')) else line
+                        try:
+                            # Create Rich syntax object
+                            syntax = RichSyntax(content, lexer, theme="monokai", word_wrap=False)
+                            line_widget = Static(syntax, classes=classes)
+                        except Exception:
+                            # Fallback to plain text if syntax highlighting fails
+                            escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
+                            line_widget = Static(escaped_line, classes=classes)
+                    else:
+                        # Escape any markup characters in the line content
+                        escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
+                        line_widget = Static(escaped_line, classes=classes)
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
