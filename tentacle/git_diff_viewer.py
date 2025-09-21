@@ -1,7 +1,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
-from textual.containers import Horizontal, Vertical, Container
+from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from datetime import datetime
@@ -35,15 +35,15 @@ class GitDiffViewer(App):
                 id="sidebar"
             ),
             # Center panel - Diff view
-            VerticalScroll(
+            Vertical(
                 Static("Diff View", id="diff-header"),
-                Vertical(id="diff-content"),
+                VerticalScroll(id="diff-content"),
                 id="diff-panel"
             ),
             # Right panel - Commit history and commit functionality
             Vertical(
                 Static("Commit History", id="history-header"),
-                Vertical(id="history-content"),
+                VerticalScroll(id="history-content"),
                 Vertical(
                     Label("Commit Message:"),
                     Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
@@ -64,7 +64,7 @@ class GitDiffViewer(App):
         
         # If no files are selected, show a message in the diff panel
         try:
-            diff_content = self.query_one("#diff-content", Vertical)
+            diff_content = self.query_one("#diff-content", VerticalScroll)
             if not diff_content.children:
                 diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
         except Exception:
@@ -180,7 +180,7 @@ class GitDiffViewer(App):
         except Exception as e:
             # Show error in diff panel
             try:
-                diff_content = self.query_one("#diff-content", Vertical)
+                diff_content = self.query_one("#diff-content", VerticalScroll)
                 diff_content.remove_children()
                 diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
             except Exception:
@@ -189,7 +189,7 @@ class GitDiffViewer(App):
         except Exception as e:
             # Show error in diff panel
             try:
-                diff_content = self.query_one("#diff-content", Vertical)
+                diff_content = self.query_one("#diff-content", VerticalScroll)
                 diff_content.remove_children()
                 diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
             except Exception:
@@ -282,7 +282,7 @@ class GitDiffViewer(App):
             return
             
         try:
-            diff_content = self.query_one("#diff-content", Vertical)
+            diff_content = self.query_one("#diff-content", VerticalScroll)
             # Ensure we're starting with a clean slate
             diff_content.remove_children()
             
