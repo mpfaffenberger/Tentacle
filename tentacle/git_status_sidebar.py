@@ -760,6 +760,7 @@ class GitStatusSidebar:
         if index:
             args.append('--index')
         args.append(tmp_path)
+        
         try:
             self.repo.git.apply(*args)
             return True
@@ -767,9 +768,9 @@ class GitStatusSidebar:
             # More specific error handling for git apply
             error_msg = str(e)
             if "error: patch failed" in error_msg:
-                print(f"Patch failed for file {file_path if 'file_path' in locals() else 'unknown'}: {error_msg}")
+                print(f"Patch failed: {error_msg}")
             elif "error: unable to write" in error_msg:
-                print(f"Unable to write patch for file {file_path if 'file_path' in locals() else 'unknown'}: {error_msg}")
+                print(f"Unable to write patch: {error_msg}")
             else:
                 print(f"Git command error applying patch: {error_msg}")
             return False
@@ -798,7 +799,7 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
-            return self._apply_patch(patch, index=True)
+            return self._apply_patch(patch, cached=True, reverse=True)
         except Exception as e:
             print(f"Error in unstage_hunk: {e}")
             return False
