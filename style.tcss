@@ -2,7 +2,7 @@
 /* GitDiffViewer CSS - GitKraken-like Design */
 
 Screen {
-    background: $background;
+    background: #001f3f;
     color: $text;
 }
 
@@ -23,27 +23,27 @@ Header {
 #sidebar {
     width: 25%;
     height: 1fr;
-    border: solid $panel-darken-1;
-    background: $panel-lighten-1;
+    border: solid #00122f;
+    background: #00122f;
 }
 
 #diff-panel {
     width: 50%;
     height: 1fr;
-    border: solid $panel-darken-1;
-    background: $panel-lighten-1;
+    border: solid #00122f;
+    background: #00122f;
 }
 
 #history-panel {
     width: 25%;
     height: 1fr;
-    border: solid $panel-darken-1;
-    background: $panel-lighten-1;
+    border: solid #00122f;
+    background: #00122f;
 }
 
 #file-tree {
     height: 1fr;
-    background: $panel-lighten-1;
+    background: #00122f;
     overflow-y: auto;
 }
 
@@ -60,15 +60,15 @@ Header {
 .commit-section {
     layout: vertical;
     width: 100%;
-    border-top: solid $panel-darken-2;
+    border-top: solid #000f1f;
     padding: 1;
 }
 
 .commit-input {
     width: 100%;
     height: 3;
-    border: solid $panel-darken-1;
-    background: $panel-lighten-2;
+    border: solid #00122f;
+    background: #00122f;
     padding: 0 1;
 }
 
@@ -85,7 +85,7 @@ Header {
 }
 
 .commit-button:disabled {
-    background: $panel-darken-2;
+    background: #000f1f;
     color: $text-disabled;
 }
 
@@ -93,7 +93,7 @@ Header {
 .hunk-container {
     layout: vertical;
     width: 100%;
-    border-bottom: solid $panel-darken-2;
+    border-bottom: solid #000f1f;
     margin-bottom: 1;
 }
 
@@ -118,7 +118,7 @@ Header {
 }
 
 .unchanged {
-    background: $panel-lighten-2;
+    background: #00122f;
     width: 100%;
     padding: 0 1;
 }
@@ -135,7 +135,7 @@ Header {
     margin: 0 1;
     height: auto;
     border: round $success;
-    background: $panel-lighten-2;
+    background: #00122f;
     color: $text;
     text-style: bold;
 }
@@ -149,7 +149,7 @@ Header {
     margin: 0 1;
     height: auto;
     border: round $error;
-    background: $panel-lighten-2;
+    background: #00122f;
     color: $text;
     text-style: bold;
 }
@@ -167,7 +167,7 @@ Header {
 }
 
 .info {
-    background: $panel-lighten-2;
+    background: #00122f;
     color: $text;
     width: 100%;
     padding: 0 1;
