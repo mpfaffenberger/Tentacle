@@ -560,6 +560,20 @@ class GitStatusSidebar:
         except Exception:
             return []
             
+    def get_current_branch(self) -> str:
+        """Get the current branch name.
+        
+        Returns:
+            Current branch name or 'unknown' if not in a repo
+        """
+        if not self.repo:
+            return "unknown"
+            
+        try:
+            return self.repo.active_branch.name
+        except Exception:
+            return "unknown"
+            
     def commit_staged_changes(self, message: str) -> bool:
         """Commit staged changes.
         

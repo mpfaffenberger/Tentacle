@@ -279,11 +279,13 @@ class GitDiffViewer(App):
             history_content = self.query_one("#history-content", VerticalScroll)
             history_content.remove_children()
             
+            branch_name = self.git_sidebar.get_current_branch()
             commits = self.git_sidebar.get_commit_history()
             
             for commit in commits:
-                # Display full commit message without truncation
-                commit_line = CommitLine(f"{commit.sha} {commit.message}", classes="info")
+                # Display branch, commit ID, author, and message with colors that match our theme
+                commit_text = f"[#87CEEB]{branch_name}[/#87CEEB] [#E0FFFF]{commit.sha}[/#E0FFFF] [#00BFFF]{commit.author}[/#00BFFF]: {commit.message}"
+                commit_line = CommitLine(commit_text, classes="info")
                 history_content.mount(commit_line)
                 
         except Exception:
