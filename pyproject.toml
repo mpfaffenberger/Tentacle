@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "textual>=6.1.0",
     "GitPython>=3.1.42",
+    "textual-pyfiglet>=1.0.0",
 ]
 
 [project.scripts]

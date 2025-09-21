@@ -1,12 +1,16 @@
 import os
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane
+from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
+from tentacle.animated_logo import AnimatedLogo
 from textual.widget import Widget
 from textual.widgets import Static
+from textual.screen import ModalScreen
+from textual.widgets import OptionList
+from textual.widgets.option_list import Option
 
 class CommitLine(Static):
     """A widget for displaying a commit line with SHA and message."""
@@ -19,6 +23,108 @@ class CommitLine(Static):
     }
     """
 
+
+class GitDiffHistoryTabs(Widget):
+    """A widget that contains tabbed diff view and commit history."""
+    
+    def compose(self) -> ComposeResult:
+        """Create the tabbed content with diff view and commit history tabs."""
+        with TabbedContent():
+            with TabPane("Diff View"):
+                yield VerticalScroll(id="diff-content")
+            with TabPane("Commit History"):
+                yield VerticalScroll(id="history-content")
+
+
+
+class BranchSwitchModal(ModalScreen):
+    """Modal screen for switching branches."""
+    
+    DEFAULT_CSS = """
+    BranchSwitchModal {
+        align: center middle;
+    }
+    
+    #Container {
+        border: solid white;
+        background: #00122f;
+        width: 50%;
+        height: 50%;
+        margin: 1;
+        padding: 1;
+    }
+    
+    OptionList {
+        height: 1fr;
+        border: tall white;
+    }
+    """
+    
+    def __init__(self, git_sidebar: GitStatusSidebar):
+        super().__init__()
+        self.git_sidebar = git_sidebar
+        
+    def compose(self) -> ComposeResult:
+        """Create the modal content."""
+        with Container():
+            yield Static("Switch Branch", classes="panel-header")
+            yield OptionList()
+            with Horizontal():
+                yield Button("Cancel", id="cancel-branch-switch", classes="cancel-button")
+                yield Button("Refresh", id="refresh-branches", classes="refresh-button")
+                
+    def on_mount(self) -> None:
+        """Populate the branch list when the modal is mounted."""
+        self.populate_branch_list()
+        
+    def populate_branch_list(self) -> None:
+        """Populate the option list with all available branches."""
+        try:
+            option_list = self.query_one(OptionList)
+            option_list.clear_options()
+            
+            # Get all branches
+            branches = self.git_sidebar.get_all_branches()
+            current_branch = self.git_sidebar.get_current_branch()
+            
+            # Add branches to the option list
+            for branch in branches:
+                if branch == current_branch:
+                    option_list.add_option(Option(branch, id=branch, disabled=True))
+                else:
+                    option_list.add_option(Option(branch, id=branch))
+                    
+        except Exception as e:
+            self.app.notify(f"Error populating branches: {e}", severity="error")
+            
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses in the modal."""
+        if event.button.id == "cancel-branch-switch":
+            self.app.pop_screen()
+        elif event.button.id == "refresh-branches":
+            self.populate_branch_list()
+            self.app.notify("Branch list refreshed", severity="information")
+            
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle branch selection."""
+        branch_name = event.option.id
+        
+        if branch_name:
+            # Check if repo is dirty before switching
+            if self.git_sidebar.is_dirty():
+                self.app.notify("Cannot switch branches with uncommitted changes. Please commit or discard changes first.", severity="error")
+            else:
+                # Attempt to switch branch
+                success = self.git_sidebar.switch_branch(branch_name)
+                if success:
+                    self.app.notify(f"Switched to branch: {branch_name}", severity="information")
+                    # Refresh the UI
+                    self.app.populate_file_tree()
+                    self.app.populate_commit_history()
+                    # Close the modal
+                    self.app.pop_screen()
+                else:
+                    self.app.notify(f"Failed to switch to branch: {branch_name}", severity="error")
 class GitDiffViewer(App):
     """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
     
@@ -28,6 +134,8 @@ class GitDiffViewer(App):
         ("q", "quit", "Quit"),
         ("Ctrl+d", "toggle_dark", "Toggle Dark Mode"),
         ("c", "commit", "Commit Staged Changes"),
+        ("r", "refresh_branches", "Refresh Branches"),
+        ("b", "show_branch_switcher", "Switch Branch"),
     ]
     
     def __init__(self, repo_path: str = None):
@@ -44,6 +152,7 @@ class GitDiffViewer(App):
         yield Horizontal(
             # Left panel - File tree
             Vertical(
+                AnimatedLogo(),
                 Static("File Tree", id="sidebar-header", classes="panel-header"),
                 Tree(os.path.basename(os.getcwd()), id="file-tree"),
                 id="sidebar"
@@ -70,6 +179,7 @@ class GitDiffViewer(App):
         
     def on_mount(self) -> None:
         """Initialize the UI when app mounts."""
+        self.populate_branch_dropdown()
         self.populate_file_tree()
         self.populate_commit_history()
         
@@ -86,7 +196,37 @@ class GitDiffViewer(App):
                 history_content.mount(Static("No commit history available", classes="info"))
         except Exception:
             pass
-
+            
+    def populate_branch_dropdown(self) -> None:
+        """Populate the branch dropdown with all available branches."""
+        try:
+            # Get the select widget
+            branch_select = self.query_one("#branch-select", Select)
+            
+            # Get all branches
+            branches = self.git_sidebar.get_all_branches()
+            current_branch = self.git_sidebar.get_current_branch()
+            
+            # Create options for the select widget
+            options = [(branch, branch) for branch in branches]
+            
+            # Set the options and default value
+            branch_select.set_options(options)
+            branch_select.value = current_branch
+            
+        except Exception as e:
+            # If we can't populate branches, that's okay - continue without it
+            pass
+            
+    def action_show_branch_switcher(self) -> None:
+        """Show the branch switcher modal."""
+        modal = BranchSwitchModal(self.git_sidebar)
+        self.push_screen(modal)
+        
+    def action_refresh_branches(self) -> None:
+        """Refresh the branch dropdown menu."""
+        self.populate_branch_dropdown()
+        self.notify("Branch list refreshed", severity="information")
         
     def action_quit(self) -> None:
         """Quit the application with a message."""
@@ -135,6 +275,37 @@ class GitDiffViewer(App):
                 
         elif button_id == "commit-button":
             self.action_commit()
+            
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Handle branch selection changes."""
+        if event.select.id == "branch-select":
+            branch_name = event.value
+            if branch_name:
+                # Check if repo is dirty before switching
+                if self.git_sidebar.is_dirty():
+                    self.notify("Cannot switch branches with uncommitted changes. Please commit or discard changes first.", severity="error")
+                    # Reset to current branch
+                    current_branch = self.git_sidebar.get_current_branch()
+                    event.select.value = current_branch
+                else:
+                    # Attempt to switch branch
+                    success = self.git_sidebar.switch_branch(branch_name)
+                    if success:
+                        self.notify(f"Switched to branch: {branch_name}", severity="information")
+                        # Refresh the UI
+                        self.populate_branch_dropdown()
+                        self.populate_file_tree()
+                        self.populate_commit_history()
+                    else:
+                        self.notify(f"Failed to switch to branch: {branch_name}", severity="error")
+                        # Reset to current branch
+                        current_branch = self.git_sidebar.get_current_branch()
+                        event.select.value = current_branch
+            
+    def action_refresh_branches(self) -> None:
+        """Refresh the branch dropdown menu."""
+        self.populate_branch_dropdown()
+        self.notify("Branch list refreshed", severity="information")
         
     def populate_file_tree(self) -> None:
         """Populate the file tree sidebar with all files and their git status."""
@@ -197,15 +368,6 @@ class GitDiffViewer(App):
                     else:  # unchanged
                         leaf_node.label.stylize("default")
                 
-        except Exception as e:
-            # Show error in diff panel
-            try:
-                diff_content = self.query_one("#diff-content", VerticalScroll)
-                diff_content.remove_children()
-                diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
-            except Exception:
-                # If we can't even show the error, that's okay - just continue without it
-                pass
         except Exception as e:
             # Show error in diff panel
             try:
@@ -403,15 +565,3 @@ class GitDiffViewer(App):
                 
         except Exception as e:
             self.notify(f"Error committing changes: {e}", severity="error")
-
-
-class GitDiffHistoryTabs(Widget):
-    """A widget that contains tabbed diff view and commit history."""
-    
-    def compose(self) -> ComposeResult:
-        """Create the tabbed content with diff view and commit history tabs."""
-        with TabbedContent():
-            with TabPane("Diff View"):
-                yield VerticalScroll(id="diff-content")
-            with TabPane("Commit History"):
-                yield VerticalScroll(id="history-content")

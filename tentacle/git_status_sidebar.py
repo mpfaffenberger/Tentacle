@@ -591,3 +591,69 @@ class GitStatusSidebar:
             return True
         except Exception:
             return False
+            
+    def get_all_branches(self) -> List[str]:
+        """Get all branch names in the repository.
+        
+        Returns:
+            List of branch names
+        """
+        if not self.repo:
+            return []
+            
+        try:
+            # Try a simpler approach using git branch command
+            branches_output = self.repo.git.branch()
+            branches = [branch.strip() for branch in branches_output.split('\n')]
+            # Remove the '*' marker from current branch and filter out empty lines
+            branches = [branch.replace('*', '').strip() for branch in branches if branch.strip()]
+            return branches
+        except Exception:
+            # Fallback to the previous method
+            try:
+                branches = [ref.name for ref in self.repo.refs if ref.name.startswith('refs/heads/')]
+                # Remove the 'refs/heads/' prefix
+                branches = [branch.replace('refs/heads/', '') for branch in branches]
+                return branches
+            except Exception:
+                return []
+            
+    def is_dirty(self) -> bool:
+        """Check if the repository has modified or staged changes.
+        
+        Returns:
+            True if repository is dirty, False otherwise
+        """
+        if not self.repo:
+            return False
+            
+        try:
+            # Check for staged changes
+            if self.get_staged_files():
+                return True
+            
+            # Check for unstaged changes
+            if self.get_unstaged_files():
+                return True
+                
+            return False
+        except Exception:
+            return False
+            
+    def switch_branch(self, branch_name: str) -> bool:
+        """Switch to a different branch.
+        
+        Args:
+            branch_name: Name of the branch to switch to
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.repo or self.is_dirty():
+            return False
+            
+        try:
+            self.repo.git.checkout(branch_name)
+            return True
+        except Exception:
+            return False
