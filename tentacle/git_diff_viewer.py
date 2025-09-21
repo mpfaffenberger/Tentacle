@@ -1,8 +1,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
-
-from textual.containers import Horizontal, Vertical, Container, VerticalScroll
+from textual.containers import Horizontal, Vertical, Container
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from datetime import datetime
