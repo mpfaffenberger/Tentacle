@@ -1,10 +1,10 @@
+import os
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
-from datetime import datetime
 from textual.widget import Widget
 
 
@@ -25,6 +25,7 @@ class GitDiffViewer(App):
         self.current_file = None
         self.hunks = []
         self.file_tree = None
+
     def compose(self) -> ComposeResult:
         """Create the UI layout with three-panel view: file tree, diff view, and commit history."""
         yield Header()
@@ -32,8 +33,8 @@ class GitDiffViewer(App):
         yield Horizontal(
             # Left panel - File tree
             Vertical(
-                Static("File Tree", id="sidebar-header"),
-                Tree("Files", id="file-tree"),
+                Static("File Tree", id="sidebar-header", classes="panel-header"),
+                Tree(os.path.basename(os.getcwd()), id="file-tree"),
                 id="sidebar"
             ),
             # Center panel - Tabbed diff view and commit history
@@ -43,8 +44,8 @@ class GitDiffViewer(App):
             ),
             # Right panel - Commit functionality only
             Vertical(
+                Static("Staged Files", id="staged-header", classes="panel-header"),
                 Vertical(
-                    Label("Commit Message:"),
                     Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
                     Button("Commit", id="commit-button", classes="commit-button"),
                     id="commit-section",
@@ -68,8 +69,6 @@ class GitDiffViewer(App):
                 diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
         except Exception:
             pass
-        
-        # Ensure the history tab has content to test scrolling
         try:
             history_content = self.query_one("#history-content", VerticalScroll)
             if not history_content.children:

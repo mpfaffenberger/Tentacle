@@ -8,16 +8,18 @@ Screen {
 
 Header {
     color: $text;
-    background: $primary;
+    background: #000f1f;
     text-style: bold;
 }
 
-#sidebar-header, #diff-header {
+.panel-header, #diff-header {
     text-align: center;
-    padding: 1;
-    background: $primary;
+    padding: 0 1;
+    background: #000f1f;
     color: $text;
     text-style: bold;
+    border-bottom: solid white;
+    max-height: 2;
 }
 
 #sidebar {
@@ -66,7 +68,7 @@ Header {
 .commit-section {
     layout: vertical;
     width: 100%;
-    border-top: solid white;
+    border-top: none;
     padding: 1;
 }
 
@@ -105,9 +107,25 @@ Header {
 }
 
 .hunk-header {
-    background: #003366 20%;
+    background: #000f1f;
+    color: $text;
     text-style: bold;
     padding: 0 1;
+}
+
+/* Tab styling */
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane > Static {
+    background: #000f1f;
+    color: $text;
+    text-style: bold;
+}
+
+TabbedContent > TabPane {
+    background: #00122f;
 }
 
 .added {
@@ -187,6 +205,25 @@ Header {
 Footer {
     color: $text;
     background: #003366;
+}
+
+Tabs {
+    background: #000f1f;
+}
+
+Tabs > Tab {
+    color: $text;
+    background: #00122f;
+    text-style: bold;
+}
+
+Tabs > Tab.--active {
+    background: #000f1f;
+    border-bottom: solid white;
+}
+
+Tabs > Tab:hover {
+    background: #001f3f;
 }
 
 /* Git status colors in tree */
