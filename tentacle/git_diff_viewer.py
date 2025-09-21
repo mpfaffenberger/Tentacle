@@ -69,6 +69,11 @@ class GitDiffViewer(App):
                 diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
         except Exception:
             pass
+            
+
+        
+        # Debug the tree structure
+        self.debug_tree_structure()
         
         
     def action_quit(self) -> None:
@@ -156,16 +161,25 @@ class GitDiffViewer(App):
                     # Create new node if not found
                     if not found:
                         current_tree_node = current_tree_node.add(part, expand=True)
-                        current_tree_node.set_class(True, "directory")
+                        current_tree_node.label.stylize("directory")
                         
                 # Add leaf node for file, or regular node for directory
                 if file_type == "file":
                     leaf_node = current_tree_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
-                    leaf_node.set_class(True, git_status)
+                    leaf_node.label.stylize(git_status)
                 else:  # directory
                     # For directories, we add all parts (including the last one)
                     dir_tree_node = current_tree_node.add(parts[-1], expand=False)
-                    dir_tree_node.set_class(True, "directory")
+                    dir_tree_node.label.stylize("directory")
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", Vertical)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
+            except Exception:
+                # If we can't even show the error, that's okay - just continue without it
+                pass
         except Exception as e:
             # Show error in diff panel
             try:
@@ -252,6 +266,8 @@ class GitDiffViewer(App):
                 
         except Exception:
             pass
+            
+
             
     def display_file_diff(self, file_path: str) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
