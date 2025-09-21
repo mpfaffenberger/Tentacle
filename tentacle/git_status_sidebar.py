@@ -306,12 +306,106 @@ class GitStatusSidebar:
                 return [Hunk(header="", lines=lines)]
                 
             # Parse the diff into hunks
-            return self._parse_diff_into_hunks(diff)
+            hunks = self._parse_diff_into_hunks(diff)
+            
+            # For markdown files, filter out whitespace-only changes
+            if file_path.endswith('.md'):
+                hunks = self._filter_whitespace_hunks(hunks)
+                
+            return hunks
             
         except Exception as e:
             # If we can't get the diff, return an empty list
             return []
         
+    def _is_whitespace_only_change(self, old_line: str, new_line: str) -> bool:
+        """Check if a change is only whitespace differences.
+        
+        Args:
+            old_line: The original line
+            new_line: The new line
+            
+        Returns:
+            True if the change is only whitespace, False otherwise
+        """
+        # Strip the lines to compare content
+        old_stripped = old_line.strip()
+        new_stripped = new_line.strip()
+        
+        # If stripped lines are identical, it's a whitespace-only change
+        if old_stripped == new_stripped:
+            return True
+            
+        # For markdown bullet points, check if it's just leading space differences
+        # But only if the bullet type is the same
+        bullet_types = ['- ', '* ', '+ ']
+        for bullet in bullet_types:
+            if old_stripped.startswith(bullet) and new_stripped.startswith(bullet):
+                # Get the content part (without the bullet)
+                old_content = old_stripped[len(bullet):]
+                new_content = new_stripped[len(bullet):]
+                return old_content == new_content
+        
+        # Not a whitespace-only change
+        return False
+    
+    def _filter_whitespace_hunks(self, hunks: List[Hunk]) -> List[Hunk]:
+        """Filter out hunks that contain only whitespace changes.
+        
+        Args:
+            hunks: List of hunks to filter
+            
+        Returns:
+            List of hunks with meaningful changes
+        """
+        filtered_hunks = []
+        
+        for hunk in hunks:
+            # We'll implement a simple filter that removes lines where the only change is whitespace
+            filtered_lines = []
+            i = 0
+            while i < len(hunk.lines):
+                line = hunk.lines[i]
+                
+                # Handle diff lines
+                if line.startswith('-'):
+                    # Check if there's a corresponding addition line
+                    if i + 1 < len(hunk.lines) and hunk.lines[i + 1].startswith('+'):
+                        next_line = hunk.lines[i + 1]
+                        
+                        # Check if they're only whitespace different
+                        if self._is_whitespace_only_change(line[1:], next_line[1:]):  # Skip the +/- prefix
+                            # Skip both lines (filter out this whitespace change)
+                            i += 2
+                            continue
+                        else:
+                            filtered_lines.append(line)
+                            filtered_lines.append(next_line)
+                            i += 2
+                            continue
+                    else:
+                        filtered_lines.append(line)
+                        i += 1
+                elif line.startswith('+'):
+                    # Check if there's a corresponding removal line
+                    if i > 0 and hunk.lines[i - 1].startswith('-'):
+                        # This line was already processed with the previous line, skip it
+                        i += 1
+                        continue
+                    else:
+                        # This is an addition without a corresponding removal
+                        filtered_lines.append(line)
+                        i += 1
+                else:
+                    # Context line (unchanged)
+                    filtered_lines.append(line)
+                    i += 1
+                    
+            # Only add hunk if it has meaningful content
+            filtered_hunks.append(Hunk(header=hunk.header, lines=filtered_lines))
+            
+        return filtered_hunks
+    
     def _parse_diff_into_hunks(self, diff: str) -> List[Hunk]:
         """Parse a unified diff string into hunks.
         
