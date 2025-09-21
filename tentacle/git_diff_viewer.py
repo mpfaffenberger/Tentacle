@@ -309,16 +309,18 @@ class GitDiffViewer(App):
                     hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
+                # Sanitize file path for use in ID (replace invalid characters)
+                sanitized_file_path = file_path.replace('/', '_').replace(' ', '_')
                 if file_status == "staged":
                     buttons = Horizontal(
-                        Button("Unstage", id=f"unstage-hunk-{i}-{file_path}", classes="unstage-button"),
-                        Button("Discard", id=f"discard-hunk-{i}-{file_path}", classes="discard-button"),
+                        Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}", classes="unstage-button"),
+                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
                 else:  # modified or untracked
                     buttons = Horizontal(
-                        Button("Stage", id=f"stage-hunk-{i}-{file_path}", classes="stage-button"),
-                        Button("Discard", id=f"discard-hunk-{i}-{file_path}", classes="discard-button"),
+                        Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}", classes="stage-button"),
+                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
                 hunk_widgets.append(buttons)
