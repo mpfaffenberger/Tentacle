@@ -1,5 +1,5 @@
 
-/* GitDiffViewer CSS - Professional Design */
+/* GitDiffViewer CSS - GitKraken-like Design */
 
 Screen {
     background: $background;
@@ -12,59 +12,7 @@ Header {
     text-style: bold;
 }
 
-#control-panel {
-    layout: horizontal;
-    height: auto;
-    padding: 1 2;
-    background: $panel-lighten-1;
-    border: tall $panel-darken-1;
-    margin-bottom: 1;
-    align-horizontal: center;
-    content-align: center middle;
-}
-
-#control-panel Button {
-    margin: 0 2;
-    width: 18;
-    height: 3;
-    border: round $primary;
-    background: $panel-lighten-2;
-    color: $text;
-    text-style: bold;
-}
-
-#control-panel Button:hover {
-    background: $primary 50%;
-}
-
-#accept-all {
-    border: round $success;
-    background: $success 30%;
-}
-
-#accept-all:hover {
-    background: $success 60%;
-}
-
-#reject-all {
-    border: round $error;
-    background: $error 30%;
-}
-
-#reject-all:hover {
-    background: $error 60%;
-}
-
-#save-changes {
-    border: round $primary;
-    background: $primary 30%;
-}
-
-#save-changes:hover {
-    background: $primary 60%;
-}
-
-#sidebar-header, #file1-header, #file2-header {
+#sidebar-header, #diff-header, #history-header {
     text-align: center;
     padding: 1;
     background: $primary;
@@ -72,19 +20,88 @@ Header {
     text-style: bold;
 }
 
-#file1-content, #file2-content {
+#sidebar {
+    width: 25%;
+    height: 1fr;
     border: solid $panel-darken-1;
     background: $panel-lighten-1;
-    color: $text;
+}
+
+#diff-panel {
+    width: 50%;
     height: 1fr;
-    overflow-y: auto;
+    border: solid $panel-darken-1;
+    background: $panel-lighten-1;
+}
+
+#history-panel {
+    width: 25%;
+    height: 1fr;
+    border: solid $panel-darken-1;
+    background: $panel-lighten-1;
 }
 
 #file-tree {
     height: 1fr;
     background: $panel-lighten-1;
-    border: solid $panel-darken-1;
     overflow-y: auto;
+}
+
+#diff-content {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#history-content {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Commit section styling */
+.commit-section {
+    layout: vertical;
+    width: 100%;
+    border-top: solid $panel-darken-2;
+    padding: 1;
+}
+
+.commit-input {
+    width: 100%;
+    height: 3;
+    border: solid $panel-darken-1;
+    background: $panel-lighten-2;
+    padding: 0 1;
+}
+
+.commit-button {
+    width: 100%;
+    margin-top: 1;
+    background: $success;
+    color: black;
+    text-style: bold;
+}
+
+.commit-button:hover {
+    background: $success 60%;
+}
+
+.commit-button:disabled {
+    background: $panel-darken-2;
+    color: $text-disabled;
+}
+
+/* Hunk styling */
+.hunk-container {
+    layout: vertical;
+    width: 100%;
+    border-bottom: solid $panel-darken-2;
+    margin-bottom: 1;
+}
+
+.hunk-header {
+    background: $primary 20%;
+    text-style: bold;
+    padding: 0 1;
 }
 
 .added {
@@ -101,29 +118,45 @@ Header {
     padding: 0 1;
 }
 
-.changed {
-    background: $panel-lighten-2;
-    color: $text;
-    width: 100%;
-    padding: 0 1;
-}
-
-.changed Static {
-    background: $panel-lighten-2;
-    color: $text;
-    width: 1fr;
-    height: auto;
-}
-
-/* Added styling for line containers with inline diffs */
-.line-container.changed {
-    background: $warning 20%;
-}
-
 .unchanged {
     background: $panel-lighten-2;
     width: 100%;
     padding: 0 1;
+}
+
+.hunk-buttons {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1 0;
+}
+
+.stage-button, .unstage-button {
+    width: 12;
+    margin: 0 1;
+    height: auto;
+    border: round $success;
+    background: $panel-lighten-2;
+    color: $text;
+    text-style: bold;
+}
+
+.stage-button:hover, .unstage-button:hover {
+    background: $success 60%;
+}
+
+.discard-button {
+    width: 12;
+    margin: 0 1;
+    height: auto;
+    border: round $error;
+    background: $panel-lighten-2;
+    color: $text;
+    text-style: bold;
+}
+
+.discard-button:hover {
+    background: $error 60%;
 }
 
 .error {
@@ -134,57 +167,12 @@ Header {
     padding: 0 1;
 }
 
-.line-container {
-    layout: horizontal;
-    width: 100%;
-    height: auto;
-    align: center middle;
-    border-bottom: solid $panel-darken-2;
-    padding: 0 1;
-}
-
-.line-container Static {
-    width: 1fr;
-    height: auto;
-}
-
-.line-buttons {
-    width: auto;
-    height: auto;
-    align: center middle;
-    padding: 0 1;
-}
-
-.accept-button, .reject-button {
-    width: 10;
-    margin: 0 1;
-    height: auto;
-    border: round $primary;
+.info {
     background: $panel-lighten-2;
     color: $text;
-    text-style: bold;
-}
-
-.accept-button:hover {
-    background: $success 60%;
-}
-
-.reject-button:hover {
-    background: $error 60%;
-}
-
-.accepted-button {
-    width: 10;
-    margin: 0 1;
-    height: auto;
-    border: round $warning;
-    background: $warning 60%;
-    color: $text;
-    text-style: bold;
-}
-
-.accepted-button:hover {
-    background: $warning 80%;
+    width: 100%;
+    padding: 0 1;
+    text-align: center;
 }
 
 Footer {
@@ -192,26 +180,17 @@ Footer {
     background: $primary;
 }
 
-#file1-content, #file2-content, #file-tree {
+#file-tree {
     scrollbar-size: 1 1;
     scrollbar-color: $primary;
 }
 
-/* Main content layout with sidebar */
-#main-content {
-    height: 1fr;
+#diff-content, #history-content {
+    scrollbar-size: 1 1;
+    scrollbar-color: $primary;
 }
 
-#main-content > Vertical {
-    width: 1fr;
-    height: 1fr;
-}
-
-#main-content > Vertical:first-child {
-    width: 30%;
-}
-
-/* Git status colors */
+/* Git status colors in tree */
 Tree > .modified {
     color: $warning;
     text-style: bold;
@@ -223,7 +202,7 @@ Tree > .staged {
 }
 
 Tree > .untracked {
-    color: $accent;
+    color: $error;
     text-style: bold;
 }
 

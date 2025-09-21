@@ -140,35 +140,47 @@ class GitDiffViewer(App):
             # Sort file_tree so directories are processed first
             file_tree.sort(key=lambda x: (x[1] != "directory", x[0]))
             
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
             # Add all files and directories
             for file_path, file_type, git_status in file_tree:
                 parts = file_path.split('/')
-                current_tree_node = tree.root
                 
-                # Navigate/create intermediate nodes
-                # For both files and directories, we need to process all parts except the last one
-                for part in parts[:-1]:
-                    # Look for existing node
-                    found = False
-                    for child in current_tree_node.children:
-                        if child.label == part:
-                            current_tree_node = child
-                            found = True
-                            break
-                    
-                    # Create new node if not found
-                    if not found:
-                        current_tree_node = current_tree_node.add(part, expand=True)
-                        current_tree_node.label.stylize("directory")
+                # Build intermediate directory nodes as needed
+                # Create a path for each level to use as a key in our directory_nodes map
+                for i in range(len(parts)):
+                    # For directories, we need to process all parts
+                    # For files, we need to process all parts except the last one (handled separately)
+                    if file_type == "directory" or i < len(parts) - 1:
+                        parent_path = "/".join(parts[:i])
+                        current_path = "/".join(parts[:i+1])
                         
-                # Add leaf node for file, or regular node for directory
+                        # Create node if it doesn't exist
+                        if current_path not in directory_nodes:
+                            parent_node = directory_nodes[parent_path]
+                            new_node = parent_node.add(parts[i], expand=True)
+                            new_node.label.stylize("directory")
+                            directory_nodes[current_path] = new_node
+                
+                # For files, add as leaf node under the appropriate directory
                 if file_type == "file":
-                    leaf_node = current_tree_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
+                    # Get the parent directory node
+                    parent_dir_path = "/".join(parts[:-1])
+                    parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                    
+                    leaf_node = parent_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
                     leaf_node.label.stylize(git_status)
-                else:  # directory
-                    # For directories, we add all parts (including the last one)
-                    dir_tree_node = current_tree_node.add(parts[-1], expand=False)
-                    dir_tree_node.label.stylize("directory")
+                
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", Vertical)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
+            except Exception:
+                # If we can't even show the error, that's okay - just continue without it
+                pass
         except Exception as e:
             # Show error in diff panel
             try:
