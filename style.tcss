@@ -51,6 +51,7 @@ Header {
     height: 1fr;
     overflow-y: auto;
     overflow-x: auto;
+    scrollbar-gutter: stable;
 }
 
 #history-content {
