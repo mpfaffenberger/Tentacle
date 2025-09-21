@@ -1,6 +1,6 @@
 # Tentacle
 
-A Textual app for viewing diffs between two text files in a split-screen UI.
+A Textual app for viewing git repository file tree and git diffs in a split-screen UI.
 
 ## Features
 
@@ -19,8 +19,8 @@ A Textual app for viewing diffs between two text files in a split-screen UI.
 ## Usage
 
 ```bash
-# Compare two files and view git status sidebar
-tentacle <file1> <file2>
+# Run the tentacle app with an optional repository path
+tentacle [repo_path]
 ```
 
 ## Controls
@@ -30,6 +30,8 @@ tentacle <file1> <file2>
 - Buttons for accepting/rejecting changes
 
 ## Installation
+
+This project uses UV for Python environment management.
 
 ```bash
 uv pip install -e .
