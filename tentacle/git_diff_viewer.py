@@ -280,9 +280,17 @@ class GitDiffViewer(App):
             
     def display_file_diff(self, file_path: str) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
+        # Skip if this is the same file we're already displaying
+        if hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path:
+            return
+            
         try:
             diff_content = self.query_one("#diff-content", Vertical)
+            # Ensure we're starting with a clean slate
             diff_content.remove_children()
+            
+            # Track which file we're currently displaying
+            self._current_displayed_file = file_path
             
             # Get file status to determine which buttons to show
             file_status = self.git_sidebar.get_file_status(file_path)
