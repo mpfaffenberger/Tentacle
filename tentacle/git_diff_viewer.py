@@ -1,6 +1,6 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input
+from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, Markdown
 from rich.syntax import Syntax as RichSyntax
 from textual.containers import Horizontal, Vertical, Container
 from textual.widgets.tree import TreeNode
@@ -328,36 +328,47 @@ class GitDiffViewer(App):
                 lexer = lexer_mapping.get(file_extension, '')
                 
                 # Add lines to the hunk widgets list
-                for line in hunk.lines:
-                    # Determine line type based on the first character
-                    if line.startswith('+'):
-                        classes = "added"
-                    elif line.startswith('-'):
-                        classes = "removed"
+                # For markdown files, we'll use a single Markdown widget instead of line-by-line processing
+                if lexer == 'markdown':
+                    # Join all lines with newlines and create a single Markdown widget
+                    content = '\n'.join(hunk.lines)
+                    line_widget = Markdown(content)
+                    # Apply appropriate classes based on hunk type
+                    if content.startswith('+'):
+                        line_widget.classes = {'added'}
+                    elif content.startswith('-'):
+                        line_widget.classes = {'removed'}
                     else:
-                        classes = "unchanged"
-                    
-                    # Use syntax highlighting if we have a lexer and line is not empty
-                    if lexer and line.strip():
-                        # Extract the actual content (remove the +/- prefix for syntax highlighting)
-                        content = line[1:] if line.startswith(('+', '-')) else line
-                        try:
-                            # Create Rich syntax object
-                            syntax = RichSyntax(content, lexer, theme="monokai", word_wrap=False)
-                            line_widget = Static(syntax, classes=classes)
-                        except Exception:
-                            # Fallback to plain text if syntax highlighting fails
+                        line_widget.classes = {'unchanged'}
+                    hunk_widgets.append(line_widget)
+                else:
+                    # Use original line-by-line processing for non-markdown files
+                    for line in hunk.lines:
+                        # Determine line type based on the first character
+                        if line.startswith('+'):
+                            classes = "added"
+                        elif line.startswith('-'):
+                            classes = "removed"
+                        else:
+                            classes = "unchanged"
+                        
+                        # Use syntax highlighting if we have a lexer and line is not empty
+                        if lexer and line.strip():
+                            # Extract the actual content (remove the +/- prefix for syntax highlighting)
+                            content = line[1:] if line.startswith(('+', '-')) else line
+                            try:
+                                # Create Rich syntax object
+                                syntax = RichSyntax(content, lexer, theme="monokai", word_wrap=False)
+                                line_widget = Static(syntax, classes=classes)
+                            except Exception:
+                                # Fallback to plain text if syntax highlighting fails
+                                escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
+                                line_widget = Static(escaped_line, classes=classes)
+                        else:
+                            # Escape any markup characters in the line content
                             escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
                             line_widget = Static(escaped_line, classes=classes)
-                    else:
-                        # Escape any markup characters in the line content
-                        escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
-                        line_widget = Static(escaped_line, classes=classes)
-                    
-                    # Apply markdown class specifically for markdown files
-                    if lexer == 'markdown':
-                        line_widget.classes = line_widget.classes.union({'markdown'})
-                    hunk_widgets.append(line_widget)
+                        hunk_widgets.append(line_widget)
                 
                 # Add appropriate action buttons for the hunk based on file status
                 # Sanitize file path for use in ID (replace invalid characters)

@@ -221,10 +221,4 @@ Tree > .tree--node {
     padding: 0 1;
 }
 
-/* Markdown styling */
-.markdown {
-    background: $panel-lighten-1;
-    color: $text;
-    width: 100%;
-    padding: 0 1;
-}
+
