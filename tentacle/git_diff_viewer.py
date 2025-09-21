@@ -11,6 +11,7 @@ from textual.widgets import Static
 from textual.screen import ModalScreen
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
+import time
 
 class CommitLine(Static):
     """A widget for displaying a commit line with SHA and message."""
@@ -326,29 +327,32 @@ class GitDiffViewer(App):
         button_id = event.button.id
         
         if button_id.startswith("stage-hunk-"):
-            # Extract hunk index and file path
-            parts = button_id.split("-", 3)
-            if len(parts) == 4:
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
                 hunk_index = int(parts[2])
-                sanitized_file_path = parts[3]
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
                 file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.stage_hunk(file_path, hunk_index)
                 
         elif button_id.startswith("unstage-hunk-"):
-            # Extract hunk index and file path
-            parts = button_id.split("-", 3)
-            if len(parts) == 4:
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
                 hunk_index = int(parts[2])
-                sanitized_file_path = parts[3]
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
                 file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.unstage_hunk(file_path, hunk_index)
                 
         elif button_id.startswith("discard-hunk-"):
-            # Extract hunk index and file path
-            parts = button_id.split("-", 3)
-            if len(parts) == 4:
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
                 hunk_index = int(parts[2])
-                sanitized_file_path = parts[3]
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
                 file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.discard_hunk(file_path, hunk_index)
                 
@@ -593,7 +597,15 @@ class GitDiffViewer(App):
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
                 if self.current_file:
-                    self.display_file_diff(self.current_file, self.current_is_staged)
+                    # Check if the file still has unstaged changes to determine which view to show
+                    file_status = self.git_sidebar.get_file_status(self.current_file)
+                    if file_status == "modified":  # File has both staged and unstaged changes
+                        # Keep showing unstaged view
+                        self.display_file_diff(self.current_file, False, force_refresh=True)
+                    else:
+                        # File is fully staged, show staged view
+                        self.current_is_staged = True
+                        self.display_file_diff(self.current_file, True, force_refresh=True)
             else:
                 self.notify(f"Failed to stage {file_path}", severity="error")
                 
@@ -613,7 +625,9 @@ class GitDiffViewer(App):
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
                 if self.current_file:
-                    self.display_file_diff(self.current_file, self.current_is_staged)
+                    # After unstaging, we should show the unstaged view of the file
+                    self.current_is_staged = False
+                    self.display_file_diff(self.current_file, False, force_refresh=True)
             else:
                 self.notify(f"Failed to unstage {file_path}", severity="error")
                 
@@ -633,7 +647,7 @@ class GitDiffViewer(App):
                 self.populate_unstaged_changes()
                 self.populate_staged_changes()
                 if self.current_file:
-                    self.display_file_diff(self.current_file, self.current_is_staged)
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to discard changes in {file_path}", severity="error")
                 
@@ -660,10 +674,10 @@ class GitDiffViewer(App):
             
 
             
-    def display_file_diff(self, file_path: str, is_staged: bool = False) -> None:
+    def display_file_diff(self, file_path: str, is_staged: bool = False, force_refresh: bool = False) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
-        # Skip if this is the same file we're already displaying
-        if hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
+        # Skip if this is the same file we're already displaying (unless force_refresh is True)
+        if not force_refresh and hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
             return
         self.current_is_staged = is_staged
             
@@ -683,6 +697,9 @@ class GitDiffViewer(App):
                 diff_content.mount(Static("No changes to display", classes="info"))
                 return
                 
+            # Generate a unique timestamp for this refresh to avoid ID collisions
+            refresh_id = str(int(time.time() * 1000000))  # microsecond timestamp
+            
             # Display each hunk
             for i, hunk in enumerate(hunks):
                 # Create all the widgets for this hunk first
@@ -716,20 +733,20 @@ class GitDiffViewer(App):
                 sanitized_file_path = file_path.replace('/', '__SLASH__').replace(' ', '__SPACE__').replace('.', '__DOT__')
                 if is_staged:
                     buttons = Horizontal(
-                        Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}", classes="unstage-button"),
+                        Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="unstage-button"),
                         classes="hunk-buttons"
                     )
                 else:
                     buttons = Horizontal(
-                        Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}", classes="stage-button"),
-                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}", classes="discard-button"),
+                        Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="stage-button"),
+                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
                 hunk_widgets.append(buttons)
                 
                 # Create the complete container with all widgets
                 # Include file_path and staging status in hunk_container ID to prevent collisions
-                hunk_container = Container(*hunk_widgets, id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}", classes="hunk-container")
+                hunk_container = Container(*hunk_widgets, id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="hunk-container")
                 
                 # Mount the complete hunk container
                 diff_content.mount(hunk_container)
