@@ -400,8 +400,6 @@ class GitDiffViewer(App):
             for file_path, file_type, git_status in file_tree:
                 parts = file_path.split('/')
                 
-                # Build intermediate directory nodes as needed
-                # Create a path for each level to use as a key in our directory_nodes map
                 for i in range(len(parts)):
                     # For directories, we need to process all parts
                     # For files, we need to process all parts except the last one (handled separately)
@@ -716,8 +714,8 @@ class GitDiffViewer(App):
                 hunk_widgets.append(buttons)
                 
                 # Create the complete container with all widgets
-                # Include file_path in hunk_container ID to prevent collisions
-                hunk_container = Container(*hunk_widgets, id=f"hunk-{i}-{sanitized_file_path}", classes="hunk-container")
+                # Include file_path and staging status in hunk_container ID to prevent collisions
+                hunk_container = Container(*hunk_widgets, id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}", classes="hunk-container")
                 
                 # Mount the complete hunk container
                 diff_content.mount(hunk_container)
