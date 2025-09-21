@@ -326,7 +326,8 @@ class GitDiffViewer(App):
                 hunk_widgets.append(buttons)
                 
                 # Create the complete container with all widgets
-                hunk_container = Container(*hunk_widgets, id=f"hunk-{i}", classes="hunk-container")
+                # Include file_path in hunk_container ID to prevent collisions
+                hunk_container = Container(*hunk_widgets, id=f"hunk-{i}-{sanitized_file_path}", classes="hunk-container")
                 
                 # Mount the complete hunk container
                 diff_content.mount(hunk_container)
