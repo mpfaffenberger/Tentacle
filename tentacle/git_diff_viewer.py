@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select
+from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select, TextArea
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
 from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from tentacle.animated_logo import AnimatedLogo
+from tentacle.gac_integration import GACConfigModal, GACIntegration
 from textual.widget import Widget
 from textual.widgets import Static
 from textual.screen import ModalScreen
@@ -135,15 +136,21 @@ class GitDiffViewer(App):
         ("q", "quit", "Quit"),
         ("Ctrl+d", "toggle_dark", "Toggle Dark Mode"),
         ("c", "commit", "Commit Staged Changes"),
+        ("g", "gac_generate", "GAC Generate Message"),
+        ("Ctrl+g", "gac_config", "Configure GAC"),
         ("r", "refresh_branches", "Refresh Branches"),
         ("b", "show_branch_switcher", "Switch Branch"),
+        ("s", "stage_selected_file", "Stage Selected File"),
+        ("u", "unstage_selected_file", "Unstage Selected File"),
     ]
     
     def __init__(self, repo_path: str = None):
         super().__init__()
+        self.gac_integration = None
         self.git_sidebar = GitStatusSidebar(repo_path)
+        self.gac_integration = GACIntegration(self.git_sidebar)
         self.current_file = None
-        self.hunks = []
+        self.current_commit = None
         self.file_tree = None
         self.current_is_staged = None
         self._current_displayed_file = None
@@ -171,6 +178,7 @@ class GitDiffViewer(App):
                 # Top pane - Unstaged changes
                 Vertical(
                     Static("Unstaged Changes", classes="panel-header"),
+                    Static("Hint: Select a file and press 's' to stage the entire file", classes="hint"),
                     Tree("Unstaged", id="unstaged-tree"),
                     id="unstaged-panel"
                 ),
@@ -182,7 +190,14 @@ class GitDiffViewer(App):
                 ),
                 # Bottom pane - Commit functionality
                 Vertical(
-                    Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
+                    Label("Commit Message (Subject):", classes="commit-label"),
+                    Horizontal(
+                        Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
+                        Button("GAC", id="gac-button", classes="gac-button"),
+                        classes="commit-message-row"
+                    ),
+                    Label("Commit Details (Body):", classes="commit-label"),
+                    TextArea(placeholder="Enter detailed description (optional)...", id="commit-body", classes="commit-body"),
                     Button("Commit", id="commit-button", classes="commit-button"),
                     id="commit-section",
                     classes="commit-section"
@@ -358,6 +373,11 @@ class GitDiffViewer(App):
                 
         elif button_id == "commit-button":
             self.action_commit()
+            
+        elif button_id == "gac-button":
+            self.action_gac_generate()
+            
+
             
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle branch selection changes."""
@@ -587,12 +607,10 @@ class GitDiffViewer(App):
     def stage_hunk(self, file_path: str, hunk_index: int) -> None:
         """Stage a specific hunk of a file."""
         try:
-            print(f"DEBUG: UI attempting to stage hunk {hunk_index} in {file_path}")
             success = self.git_sidebar.stage_hunk(file_path, hunk_index)
             
             if success:
                 self.notify(f"Staged hunk in {file_path}", severity="information")
-                print(f"DEBUG: Successfully staged hunk, refreshing UI")
                 
                 # Clear any cached diff state
                 if hasattr(self, '_current_displayed_file'):
@@ -607,15 +625,30 @@ class GitDiffViewer(App):
                 if self.current_file:
                     # Always stay in the current view after staging a hunk
                     # This prevents unwanted view switching when staging individual hunks
-                    print(f"DEBUG: Refreshing current view after staging")
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to stage {file_path}", severity="error")
-                print(f"DEBUG: Failed to stage hunk {hunk_index}")
                 
         except Exception as e:
             self.notify(f"Error staging hunk: {e}", severity="error")
-            print(f"DEBUG: Exception in stage_hunk: {e}")
+
+    def stage_file(self, file_path: str) -> None:
+        """Stage all changes in a file."""
+        try:
+            success = self.git_sidebar.stage_file(file_path)
+            if success:
+                self.notify(f"Staged all changes in {file_path}", severity="information")
+                # Refresh trees
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                # If we were viewing this file, switch to staged view for it
+                if self.current_file == file_path:
+                    self.display_file_diff(file_path, is_staged=True, force_refresh=True)
+            else:
+                self.notify(f"Failed to stage all changes in {file_path}", severity="error")
+        except Exception as e:
+            self.notify(f"Error staging file: {e}", severity="error")
             
     def unstage_hunk(self, file_path: str, hunk_index: int) -> None:
         """Unstage a specific hunk of a file."""
@@ -641,12 +674,10 @@ class GitDiffViewer(App):
     def discard_hunk(self, file_path: str, hunk_index: int) -> None:
         """Discard changes in a specific hunk of a file."""
         try:
-            print(f"DEBUG: UI attempting to discard hunk {hunk_index} in {file_path}")
             success = self.git_sidebar.discard_hunk(file_path, hunk_index)
             
             if success:
                 self.notify(f"Discarded hunk in {file_path}", severity="information")
-                print(f"DEBUG: Successfully discarded hunk, refreshing UI")
                 
                 # Clear any cached diff state
                 if hasattr(self, '_current_displayed_file'):
@@ -659,15 +690,12 @@ class GitDiffViewer(App):
                 self.populate_staged_changes()
                 
                 if self.current_file:
-                    print(f"DEBUG: Refreshing diff view for {self.current_file}")
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
             else:
                 self.notify(f"Failed to discard changes in {file_path}", severity="error")
-                print(f"DEBUG: Failed to discard hunk {hunk_index}")
                 
         except Exception as e:
             self.notify(f"Error discarding hunk: {e}", severity="error")
-            print(f"DEBUG: Exception in discard_hunk: {e}")
             
     def populate_commit_history(self) -> None:
         """Populate the commit history tab."""
@@ -691,18 +719,14 @@ class GitDiffViewer(App):
             
     def display_file_diff(self, file_path: str, is_staged: bool = False, force_refresh: bool = False) -> None:
         """Display the diff for a selected file in the diff panel with appropriate buttons."""
-        print(f"DEBUG: display_file_diff called for {file_path}, staged={is_staged}, force_refresh={force_refresh}")
-        
         # Skip if this is the same file we're already displaying (unless force_refresh is True)
         if not force_refresh and hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
-            print(f"DEBUG: Skipping refresh, same file already displayed")
             return
         self.current_is_staged = is_staged
             
         try:
             diff_content = self.query_one("#diff-content", VerticalScroll)
             # Ensure we're starting with a clean slate
-            print(f"DEBUG: Clearing diff content")
             diff_content.remove_children()
             
             # Track which file we're currently displaying
@@ -711,7 +735,6 @@ class GitDiffViewer(App):
             
             # Get file status to determine which buttons to show
             hunks = self.git_sidebar.get_diff_hunks(file_path, staged=is_staged)
-            print(f"DEBUG: Found {len(hunks) if hunks else 0} hunks for display")
             
             if not hunks:
                 diff_content.mount(Static("No changes to display", classes="info"))
@@ -777,12 +800,20 @@ class GitDiffViewer(App):
     def action_commit(self) -> None:
         """Commit staged changes with a commit message from the UI."""
         try:
-            # Get the commit message input widget
+            # Get the commit message input widgets
             commit_input = self.query_one("#commit-message", Input)
-            message = commit_input.value.strip()
+            commit_body = self.query_one("#commit-body", TextArea)
+            
+            subject = commit_input.value.strip()
+            body = commit_body.text.strip()
+            
+            # Combine subject and body for full commit message
+            message = subject
+            if body:
+                message = f"{subject}\n\n{body}"
             
             # Check if there's a commit message
-            if not message:
+            if not subject:
                 self.notify("Please enter a commit message", severity="warning")
                 return
                 
@@ -797,8 +828,9 @@ class GitDiffViewer(App):
             
             if success:
                 self.notify(f"Successfully committed changes with message: {message}", severity="information")
-                # Clear the commit message input
+                # Clear the commit message inputs
                 commit_input.value = ""
+                commit_body.text = ""
                 # Refresh the UI
                 self.populate_file_tree()
                 self.populate_unstaged_changes()
@@ -809,3 +841,105 @@ class GitDiffViewer(App):
                 
         except Exception as e:
             self.notify(f"Error committing changes: {e}", severity="error")
+    
+    def action_gac_config(self) -> None:
+        """Show GAC configuration modal."""
+        def handle_config_result(result):
+            # Refresh GAC integration after config changes
+            self.gac_integration = GACIntegration(self.git_sidebar)
+            
+        self.push_screen(GACConfigModal(), handle_config_result)
+    
+    def action_stage_selected_file(self) -> None:
+        """Stage the entire currently selected file from any file tree if it is unstaged/untracked."""
+        try:
+            if not self.current_file:
+                self.notify("No file selected", severity="warning")
+                return
+            status = self.git_sidebar.get_file_status(self.current_file)
+            # Allow staging even if file is partially staged; block only if unchanged
+            if status == "unchanged":
+                self.notify("Selected file has no changes", severity="information")
+                return
+            self.stage_file(self.current_file)
+        except Exception as e:
+            self.notify(f"Error staging selected file: {e}", severity="error")
+
+    def action_unstage_selected_file(self) -> None:
+        """Unstage all changes for the selected file (if staged)."""
+        try:
+            if not self.current_file:
+                self.notify("No file selected", severity="warning")
+                return
+            status = self.git_sidebar.get_file_status(self.current_file)
+            if status != "staged":
+                self.notify("Selected file is not staged", severity="information")
+                return
+            if hasattr(self.git_sidebar, 'unstage_file_all') and callable(self.git_sidebar.unstage_file_all):
+                success = self.git_sidebar.unstage_file_all(self.current_file)
+            else:
+                # Fallback: remove entire file from index
+                success = self.git_sidebar.unstage_file(self.current_file)
+            if success:
+                self.notify(f"Unstaged all changes in {self.current_file}", severity="information")
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                # If we were viewing this file, show unstaged diff now
+                if self.current_file:
+                    self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
+            else:
+                self.notify(f"Failed to unstage {self.current_file}", severity="error")
+        except Exception as e:
+            self.notify(f"Error unstaging selected file: {e}", severity="error")
+
+    def action_gac_generate(self) -> None:
+        """Generate commit message using GAC and populate the commit message fields (no auto-commit)."""
+        try:
+            # Check if GAC is configured
+            if not self.gac_integration.is_configured():
+                self.notify("🤖 GAC is not configured. Press Ctrl+G to configure it first.", severity="warning")
+                return
+            
+            # Check if there are staged changes
+            staged_files = self.git_sidebar.get_staged_files()
+            if not staged_files:
+                self.notify("No staged changes to generate commit message for", severity="warning")
+                return
+            
+            # Show generating message
+            self.notify("🤖 Generating commit message with GAC...", severity="information")
+            
+            # Generate commit message
+            try:
+                commit_message = self.gac_integration.generate_commit_message(
+                    staged_only=True,
+                    one_liner=False
+                )
+                
+                if commit_message:
+                    # Parse the commit message into subject and body
+                    lines = commit_message.strip().split('\n', 1)
+                    subject = lines[0].strip()
+                    body = lines[1].strip() if len(lines) > 1 else ""
+                    
+                    # Populate the commit message inputs
+                    try:
+                        commit_input = self.query_one("#commit-message", Input)
+                        commit_body = self.query_one("#commit-body", TextArea)
+                        
+                        commit_input.value = subject
+                        commit_body.text = body
+                        
+                        self.notify(f"✅ GAC generated commit message: {subject[:50]}...", severity="information")
+                        
+                    except Exception as e:
+                        self.notify(f"Generated message but failed to populate fields: {e}", severity="warning")
+                else:
+                    self.notify("❌ GAC failed to generate a commit message", severity="error")
+                    
+            except Exception as e:
+                self.notify(f"❌ Failed to generate commit message: {e}", severity="error")
+                
+        except Exception as e:
+            self.notify(f"❌ Error with GAC integration: {e}", severity="error")

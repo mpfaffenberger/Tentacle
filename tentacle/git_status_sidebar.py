@@ -560,22 +560,22 @@ class GitStatusSidebar:
             return False
             
     def unstage_file(self, file_path: str) -> bool:
-        """Unstage a file.
+        """Unstage a file from the index (remove all entries for the file from staging).
         
-        Args:
-            file_path: Path to the file relative to repository root
-            
-        Returns:
-            True if successful, False otherwise
+        This uses `git restore --staged` which is safer for partials.
         """
         if not self.repo:
             return False
-            
         try:
-            self.repo.index.remove([file_path], working_tree=False)
+            # Safer than index.remove for mixed states
+            self.repo.git.restore('--staged', '--', file_path)
             return True
         except Exception:
             return False
+
+    def unstage_file_all(self, file_path: str) -> bool:
+        """Unstage all changes for a file using git restore --staged."""
+        return self.unstage_file(file_path)
             
     def discard_file_changes(self, file_path: str) -> bool:
         """Discard changes to a file.
@@ -807,16 +807,64 @@ class GitStatusSidebar:
     def discard_hunk(self, file_path: str, hunk_index: int) -> bool:
         try:
             hunks = self.get_diff_hunks(file_path, staged=False)
-            print(f"DEBUG: Found {len(hunks)} unstaged hunks for {file_path}")
             if hunk_index >= len(hunks):
-                print(f"DEBUG: Hunk index {hunk_index} out of range")
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
-            print(f"DEBUG: Created reverse patch for discarding hunk {hunk_index}")
-            result = self._apply_patch(patch)
-            print(f"DEBUG: Discard patch apply result: {result}")
-            return result
+            return self._apply_patch(patch)
         except Exception as e:
             print(f"Error in discard_hunk: {e}")
             return False
+    
+    def get_git_status(self) -> str:
+        """Get git status output as string for GAC.
+        
+        Returns:
+            Git status output as string
+        """
+        if not self.repo:
+            return ""
+            
+        try:
+            return self.repo.git.status()
+        except Exception:
+            return ""
+    
+    def get_staged_diff(self) -> str:
+        """Get staged changes diff for GAC.
+        
+        Returns:
+            Staged diff as string
+        """
+        if not self.repo:
+            return ""
+            
+        try:
+            return self.repo.git.diff('--cached')
+        except Exception:
+            return ""
+    
+    def get_full_diff(self) -> str:
+        """Get full diff (staged + unstaged) for GAC.
+        
+        Returns:
+            Full diff as string
+        """
+        if not self.repo:
+            return ""
+            
+        try:
+            # Get both staged and unstaged changes
+            staged_diff = self.repo.git.diff('--cached')
+            unstaged_diff = self.repo.git.diff()
+            
+            if staged_diff and unstaged_diff:
+                return f"# Staged changes:\n{staged_diff}\n\n# Unstaged changes:\n{unstaged_diff}"
+            elif staged_diff:
+                return staged_diff
+            elif unstaged_diff:
+                return unstaged_diff
+            else:
+                return ""
+        except Exception:
+            return ""
