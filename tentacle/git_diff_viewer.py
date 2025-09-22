@@ -134,7 +134,6 @@ class GitDiffViewer(App):
     CSS_PATH = "../style.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("Ctrl+d", "toggle_dark", "Toggle Dark Mode"),
         ("c", "commit", "Commit Staged Changes"),
         ("g", "gac_generate", "GAC Generate Message"),
         ("Ctrl+g", "gac_config", "Configure GAC"),
@@ -146,6 +145,7 @@ class GitDiffViewer(App):
     
     def __init__(self, repo_path: str = None):
         super().__init__()
+        self.dark = True
         self.gac_integration = None
         self.git_sidebar = GitStatusSidebar(repo_path)
         self.gac_integration = GACIntegration(self.git_sidebar)
@@ -263,10 +263,6 @@ class GitDiffViewer(App):
     def action_quit(self) -> None:
         """Quit the application with a message."""
         self.exit("Thanks for using GitDiffViewer!")
-        
-    def action_toggle_dark(self) -> None:
-        """Toggle dark mode."""
-        self.dark = not self.dark
         
     def on_unstaged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle unstaged tree node selection to display file diffs."""
