@@ -892,7 +892,6 @@ class GitDiffViewer(App):
     def action_gac_generate(self) -> None:
         """Generate commit message using GAC and populate the commit message fields (no auto-commit)."""
         try:
-            # Check if GAC is configured
             if not self.gac_integration.is_configured():
                 self.notify("🤖 GAC is not configured. Press Ctrl+G to configure it first.", severity="warning")
                 return

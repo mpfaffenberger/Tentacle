@@ -236,33 +236,18 @@ class GACConfigModal(ModalScreen):
     def _save_config(self, config: Dict[str, str]) -> None:
         """Save configuration to GAC config file."""
         gac_env_file = Path.home() / ".gac.env"
-        
-        # Create or update the .gac.env file
-        existing_config = {}
-        if gac_env_file.exists():
-            try:
-                with open(gac_env_file, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and '=' in line and not line.startswith('#'):
-                            key, value = line.split('=', 1)
-                            existing_config[key.strip()] = value.strip().strip('"\'')
-            except Exception:
-                pass
-                
-        # Update config
         provider = config["provider"]
-        api_key_var = f"{provider.upper()}_API_KEY"
-        existing_config["PROVIDER"] = provider
-        existing_config["MODEL"] = f"{provider}:{config['model']}"
-        existing_config[api_key_var] = config["api_key"]
-        
+        gac_model = f"{provider}:{config['model']}"
+        out_config = dict()
+        out_config["GAC_MODEL"] = gac_model
+        out_config[f"{provider.upper()}_API_KEY"] = config["api_key"]
+
         # Write back to file
         with open(gac_env_file, 'w') as f:
             f.write("# GAC Configuration\n")
-            for key, value in existing_config.items():
+            for key, value in out_config.items():
                 f.write(f'{key}="{value}"\n')
-                
+
 
 class GACIntegration:
     """Integration class for GAC functionality."""
@@ -285,23 +270,17 @@ class GACIntegration:
                     if line and '=' in line and not line.startswith('#'):
                         key, value = line.split('=', 1)
                         config[key.strip()] = value.strip().strip('"\'')
+            self.config = config
             return config
         except Exception:
             return None
             
     def is_configured(self) -> bool:
         """Check if GAC is properly configured."""
+        self.config = self._load_config()
         if not self.config:
             return False
-            
-        required_keys = ["PROVIDER", "MODEL"]
-        if not all(key in self.config for key in required_keys):
-            return False
-            
-        # Check if API key exists for the provider
-        provider = self.config.get("PROVIDER", "")
-        api_key_var = f"{provider.upper()}_API_KEY"
-        return api_key_var in self.config
+        return True
         
     def generate_commit_message(self, staged_only: bool = True, one_liner: bool = False, 
                               hint: str = "", scope: Optional[str] = None) -> Optional[str]:
@@ -330,14 +309,14 @@ class GACIntegration:
             )
             
             # Generate commit message
-            model = self.config["MODEL"]
+            model = self.config["GAC_MODEL"]
             commit_message = gac.generate_commit_message(
                 model=model,
                 prompt=(system_prompt, user_prompt),
                 quiet=True
             )
             
-            return gac.clean_commit_message(commit_message)
+            return commit_message
             
         except Exception as e:
             raise ValueError(f"Failed to generate commit message: {e}")
