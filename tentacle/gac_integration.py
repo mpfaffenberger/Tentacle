@@ -67,7 +67,7 @@ class GACConfigModal(ModalScreen):
             "claude-3-haiku-20240307"
         ],
         "cerebras": [
-            "qwen3-coder-480b",
+            "qwen-3-coder-480b",
             "llama3.1-70b",
             "llama3.1-8b"
         ],
@@ -246,7 +246,7 @@ class GACConfigModal(ModalScreen):
         with open(gac_env_file, 'w') as f:
             f.write("# GAC Configuration\n")
             for key, value in out_config.items():
-                f.write(f'{key}="{value}"\n')
+                f.write(f"{key}='{value}'\n")
 
 
 class GACIntegration:
@@ -261,7 +261,7 @@ class GACIntegration:
         gac_env_file = Path.home() / ".gac.env"
         if not gac_env_file.exists():
             return None
-            
+
         config = {}
         try:
             with open(gac_env_file, 'r') as f:

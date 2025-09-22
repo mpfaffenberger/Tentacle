@@ -43,7 +43,9 @@ Header {
     height: 1fr;
     border: solid white;
     background: #00122f;
-    overflow: auto;
+    overflow-y: scroll;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
 }
 
 #unstaged-panel, #staged-panel {
