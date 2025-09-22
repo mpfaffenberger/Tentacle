@@ -1,83 +1,280 @@
 
-/* GitDiffViewer CSS - Professional Design */
+/* GitDiffViewer CSS - GitKraken-like Design */
 
 Screen {
-    background: $background;
+    background: #001f3f;
     color: $text;
 }
 
 Header {
     color: $text;
-    background: $primary;
+    background: #000f1f;
     text-style: bold;
 }
 
-#control-panel {
-    layout: horizontal;
-    height: auto;
-    padding: 1 2;
-    background: $panel-lighten-1;
-    border: tall $panel-darken-1;
-    margin-bottom: 1;
-    align-horizontal: center;
-    content-align: center middle;
-}
-
-#control-panel Button {
-    margin: 0 2;
-    width: 18;
-    height: 3;
-    border: round $primary;
-    background: $panel-lighten-2;
+.panel-header, #diff-header {
+    text-align: center;
+    padding: 0 1;
+    background: #000f1f;
     color: $text;
     text-style: bold;
+    border-bottom: solid white;
+    max-height: 2;
 }
 
-#control-panel Button:hover {
-    background: $primary 50%;
+#sidebar {
+    width: 25%;
+    height: 1fr;
+    border: solid white;
+    background: #00122f;
+    overflow: auto;
 }
 
-#accept-all {
-    border: round $success;
-    background: $success 30%;
+#diff-panel {
+    width: 50%;
+    height: 1fr;
+    border: solid white;
+    background: #00122f;
+    overflow: auto;
 }
 
-#accept-all:hover {
+#status-panel {
+    width: 25%;
+    height: 1fr;
+    border: solid white;
+    background: #00122f;
+    overflow-y: scroll;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
+}
+
+#unstaged-panel, #staged-panel {
+    height: 33%;
+    border-bottom: solid white;
+    background: #00122f;
+}
+
+#commit-section {
+    height: 33%;
+    background: #00122f;
+}
+
+#unstaged-tree, #staged-tree {
+    height: 1fr;
+    background: #00122f;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
+}
+
+#file-tree {
+    height: 1fr;
+    background: #00122f;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+    scrollbar-color: #003366;
+}
+
+#diff-content {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#history-content {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Commit section styling */
+.commit-section {
+    layout: vertical;
+    width: 100%;
+    border-top: solid white;
+    padding: 1;
+}
+
+.commit-input {
+    width: 100%;
+    height: 3;
+    border: solid white;
+    background: #00122f;
+    padding: 0 1;
+}
+
+.commit-button {
+    width: 100%;
+    margin-top: 1;
+    background: $success;
+    color: black;
+    text-style: bold;
+}
+
+.commit-button:hover {
     background: $success 60%;
 }
 
-#reject-all {
-    border: round $error;
-    background: $error 30%;
+.commit-button:disabled {
+    background: #000f1f;
+    color: $text-disabled;
 }
 
-#reject-all:hover {
-    background: $error 60%;
+/* GAC Configuration Modal Styles */
+.gac-label {
+    margin: 1 0 0 0;
+    color: #4fbdba;
+    text-style: bold;
 }
 
-#save-changes {
-    border: round $primary;
-    background: $primary 30%;
+.gac-input {
+    margin: 1 0;
+    width: 100%;
+    border: solid #4fbdba;
+    background: #001f3f;
+    color: white;
+    padding: 0 1;
 }
 
-#save-changes:hover {
-    background: $primary 60%;
+.gac-select {
+    margin: 1 0;
+    width: 100%;
+    border: solid #4fbdba;
 }
 
-#file1-header, #file2-header {
-    text-align: center;
+.gac-buttons {
+    align: center bottom;
+    height: auto;
+    margin: 2 0 0 0;
+}
+
+.test-button {
+    background: #ff6b35;
+    color: white;
+    margin: 0 1;
+    text-style: bold;
+}
+
+.test-button:hover {
+    background: #ff8c5a;
+}
+
+.save-button {
+    background: #4fbdba;
+    color: white;
+    margin: 0 1;
+    text-style: bold;
+}
+
+.save-button:hover {
+    background: #6fccc9;
+}
+
+.cancel-button {
+    background: #666666;
+    color: white;
+    margin: 0 1;
+    text-style: bold;
+}
+
+.cancel-button:hover {
+    background: #888888;
+}
+
+/* GAC button styling */
+.gac-button {
+    background: #ff6b35;
+    color: white;
+    margin: 0 0 0 1;
+    text-style: bold;
+    width: 8;
+    height: 3;
+}
+
+.gac-button:hover {
+    background: #ff8c5a;
+}
+
+/* Commit message row layout */
+.commit-message-row {
+    width: 100%;
+    height: 3;
+    margin: 0 0 1 0;
+}
+
+/* Commit Section Styles */
+.commit-label {
+    margin: 0 0 0 0;
+    color: #4fbdba;
+    text-style: bold;
+    height: 1;
+}
+
+.commit-input {
+    margin: 0 0 1 0;
+    background: #001f3f;
+    border: solid white;
+    color: white;
+    height: 3;
+}
+
+.commit-body {
+    margin: 0 0 1 0;
+    background: #001f3f;
+    border: solid white;
+    color: white;
+    height: 6;
+    min-height: 6;
+    width: 100%;
     padding: 1;
-    background: $primary;
+}
+
+.commit-button {
+    margin: 1 0;
+    background: #4fbdba;
+    color: white;
+    text-style: bold;
+}
+
+.commit-button:hover {
+    background: #6fccc9;
+}
+
+.commit-section {
+    padding: 1;
+    border-top: solid white;
+    border-bottom: solid white;
+}
+
+
+
+/* Hunk styling */
+.hunk-container {
+    layout: vertical;
+    width: 100%;
+    border-bottom: solid white;
+    margin-bottom: 1;
+    height: auto;
+}
+
+.hunk-header {
+    background: #000f1f;
+    color: $text;
+    text-style: bold;
+    padding: 0 1;
+}
+
+/* Tab styling */
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane > Static {
+    background: #000f1f;
     color: $text;
     text-style: bold;
 }
 
-#file1-content, #file2-content {
-    border: solid $panel-darken-1;
-    background: $panel-lighten-1;
-    color: $text;
-    height: 1fr;
-    overflow-y: auto;
+TabbedContent > TabPane {
+    background: #00122f;
 }
 
 .added {
@@ -85,6 +282,7 @@ Header {
     color: black;
     width: 100%;
     padding: 0 1;
+    height: auto;
 }
 
 .removed {
@@ -92,31 +290,49 @@ Header {
     color: white;
     width: 100%;
     padding: 0 1;
-}
-
-.changed {
-    background: $panel-lighten-2;
-    color: $text;
-    width: 100%;
-    padding: 0 1;
-}
-
-.changed Static {
-    background: $panel-lighten-2;
-    color: $text;
-    width: 1fr;
     height: auto;
 }
 
-/* Added styling for line containers with inline diffs */
-.line-container.changed {
-    background: $warning 20%;
-}
-
 .unchanged {
-    background: $panel-lighten-2;
+    background: #00122f;
     width: 100%;
     padding: 0 1;
+    height: auto;
+}
+
+.hunk-buttons {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1 0;
+}
+
+.stage-button, .unstage-button {
+    width: 12;
+    margin: 0 1;
+    height: auto;
+    border: round white;
+    background: #00122f;
+    color: $text;
+    text-style: bold;
+}
+
+.stage-button:hover, .unstage-button:hover {
+    background: $success 60%;
+}
+
+.discard-button {
+    width: 12;
+    margin: 0 1;
+    height: auto;
+    border: round white;
+    background: #00122f;
+    color: $text;
+    text-style: bold;
+}
+
+.discard-button:hover {
+    background: $error 60%;
 }
 
 .error {
@@ -127,65 +343,63 @@ Header {
     padding: 0 1;
 }
 
-.line-container {
-    layout: horizontal;
+.info {
+    background: #00122f;
+    color: $text;
     width: 100%;
-    height: auto;
-    align: center middle;
-    border-bottom: solid $panel-darken-2;
     padding: 0 1;
-}
-
-.line-container Static {
-    width: 1fr;
-    height: auto;
-}
-
-.line-buttons {
-    width: auto;
-    height: auto;
-    align: center middle;
-    padding: 0 1;
-}
-
-.accept-button, .reject-button {
-    width: 10;
-    margin: 0 1;
-    height: auto;
-    border: round $primary;
-    background: $panel-lighten-2;
-    color: $text;
-    text-style: bold;
-}
-
-.accept-button:hover {
-    background: $success 60%;
-}
-
-.reject-button:hover {
-    background: $error 60%;
-}
-
-.accepted-button {
-    width: 10;
-    margin: 0 1;
-    height: auto;
-    border: round $warning;
-    background: $warning 60%;
-    color: $text;
-    text-style: bold;
-}
-
-.accepted-button:hover {
-    background: $warning 80%;
 }
 
 Footer {
     color: $text;
-    background: $primary;
+    background: #003366;
 }
 
-#file1-content, #file2-content {
-    scrollbar-size: 1 1;
-    scrollbar-color: $primary;
+Tabs {
+    background: #000f1f;
+}
+
+Tabs > Tab {
+    color: $text;
+    background: #00122f;
+    text-style: bold;
+}
+
+Tabs > Tab.--active {
+    background: #000f1f;
+    border-bottom: solid white;
+}
+
+Tabs > Tab:hover {
+    background: #001f3f;
+}
+
+/* Git status colors in tree */
+Tree > .modified {
+    color: $warning;
+    text-style: bold;
+}
+
+Tree > .staged {
+    color: $success;
+    text-style: bold;
+}
+
+Tree > .untracked {
+    color: $error;
+    text-style: bold;
+}
+
+Tree > .unchanged {
+    color: $text;
+}
+
+Tree > .directory {
+    color: #003366;
+    text-style: bold;
+}
+
+Tree > .tree--node {
+    padding: 0 1;
+    background: #00122f;
 }

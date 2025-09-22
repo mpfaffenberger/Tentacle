@@ -1,399 +1,940 @@
-import sys
-from difflib import SequenceMatcher
+import os
+from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Header, Footer, Button
-from textual.containers import Horizontal, Vertical, Container
+from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select, TextArea
+from textual.containers import Horizontal, Vertical, Container, VerticalScroll
+from textual.widgets.tree import TreeNode
+from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
+from tentacle.animated_logo import AnimatedLogo
+from tentacle.gac_integration import GACConfigModal, GACIntegration
+from textual.widget import Widget
+from textual.widgets import Static
+from textual.screen import ModalScreen
+from textual.widgets import OptionList
+from textual.widgets.option_list import Option
+import time
 
-
-class GitDiffViewer(App):
-    """A Textual app for viewing diffs between two text files in a split-screen UI."""
+class CommitLine(Static):
+    """A widget for displaying a commit line with SHA and message."""
     
+    DEFAULT_CSS = """
+    CommitLine {
+        width: 100%;
+        height: 1;
+        overflow: hidden hidden;
+    }
+    """
+
+
+class GitDiffHistoryTabs(Widget):
+    """A widget that contains tabbed diff view and commit history."""
+    
+    def compose(self) -> ComposeResult:
+        """Create the tabbed content with diff view and commit history tabs."""
+        with TabbedContent():
+            with TabPane("Diff View"):
+                yield VerticalScroll(id="diff-content")
+            with TabPane("Commit History"):
+                yield VerticalScroll(id="history-content")
+
+
+
+class BranchSwitchModal(ModalScreen):
+    """Modal screen for switching branches."""
+    
+    DEFAULT_CSS = """
+    BranchSwitchModal {
+        align: center middle;
+    }
+    
+    #Container {
+        border: solid white;
+        background: #00122f;
+        width: 50%;
+        height: 50%;
+        margin: 1;
+        padding: 1;
+    }
+    
+    OptionList {
+        height: 1fr;
+        border: tall white;
+    }
+    """
+    
+    def __init__(self, git_sidebar: GitStatusSidebar):
+        super().__init__()
+        self.git_sidebar = git_sidebar
+        
+    def compose(self) -> ComposeResult:
+        """Create the modal content."""
+        with Container():
+            yield Static("Switch Branch", classes="panel-header")
+            yield OptionList()
+            with Horizontal():
+                yield Button("Cancel", id="cancel-branch-switch", classes="cancel-button")
+                yield Button("Refresh", id="refresh-branches", classes="refresh-button")
+                
+    def on_mount(self) -> None:
+        """Populate the branch list when the modal is mounted."""
+        self.populate_branch_list()
+        
+    def populate_branch_list(self) -> None:
+        """Populate the option list with all available branches."""
+        try:
+            option_list = self.query_one(OptionList)
+            option_list.clear_options()
+            
+            # Get all branches
+            branches = self.git_sidebar.get_all_branches()
+            current_branch = self.git_sidebar.get_current_branch()
+            
+            # Add branches to the option list
+            for branch in branches:
+                if branch == current_branch:
+                    option_list.add_option(Option(branch, id=branch, disabled=True))
+                else:
+                    option_list.add_option(Option(branch, id=branch))
+                    
+        except Exception as e:
+            self.app.notify(f"Error populating branches: {e}", severity="error")
+            
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses in the modal."""
+        if event.button.id == "cancel-branch-switch":
+            self.app.pop_screen()
+        elif event.button.id == "refresh-branches":
+            self.populate_branch_list()
+            self.app.notify("Branch list refreshed", severity="information")
+            
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle branch selection."""
+        branch_name = event.option.id
+        
+        if branch_name:
+            # Check if repo is dirty before switching
+            if self.git_sidebar.is_dirty():
+                self.app.notify("Cannot switch branches with uncommitted changes. Please commit or discard changes first.", severity="error")
+            else:
+                # Attempt to switch branch
+                success = self.git_sidebar.switch_branch(branch_name)
+                if success:
+                    self.app.notify(f"Switched to branch: {branch_name}", severity="information")
+                    # Refresh the UI
+                    self.app.populate_file_tree()
+                    self.app.populate_commit_history()
+                    # Close the modal
+                    self.app.pop_screen()
+                else:
+                    self.app.notify(f"Failed to switch to branch: {branch_name}", severity="error")
+class GitDiffViewer(App):
+    """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
+    
+    TITLE = "Tentacle"
     CSS_PATH = "../style.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("Ctrl+d", "toggle_dark", "Toggle Dark Mode"),
+        ("c", "commit", "Commit Staged Changes"),
+        ("g", "gac_generate", "GAC Generate Message"),
+        ("Ctrl+g", "gac_config", "Configure GAC"),
+        ("r", "refresh_branches", "Refresh Branches"),
+        ("b", "show_branch_switcher", "Switch Branch"),
+        ("s", "stage_selected_file", "Stage Selected File"),
+        ("u", "unstage_selected_file", "Unstage Selected File"),
     ]
     
-    def __init__(self, file1_path: str, file2_path: str):
+    def __init__(self, repo_path: str = None):
         super().__init__()
-        self.file1_path = file1_path
-        self.file2_path = file2_path
-        self.file1_lines = []
-        self.file2_lines = []
-        self.line_diffs_file1 = []
-        self.line_diffs_file2 = []
-        self.accepted_changes = []  # Track which changes have been accepted
-        
-    def on_mount(self) -> None:
-        """Load files and calculate diff when app mounts."""
-        self.load_files_and_calculate_diff()
-        
-        # Populate the file content areas with styled lines
-        file1_content = self.query_one("#file1-content", Vertical)
-        file2_content = self.query_one("#file2-content", Vertical)
-        
-        for i, (diff_type, line) in enumerate(self.line_diffs_file1):
-            display_line = line if line else " "
-            file1_content.mount(Static(display_line, classes=diff_type, id=f"file1-line-{i}", markup=True))
-            
-        for i, (diff_type, line) in enumerate(self.line_diffs_file2):
-            display_line = line if line else " "
-            
-            # For modified lines, create a container with the line and accept/reject buttons
-            if diff_type in ["added", "changed"]:
-                line_container = Container(
-                    Static(display_line, classes=diff_type, id=f"file2-line-{i}", markup=True),
-                    Horizontal(
-                        Button("Accept", id=f"accept-{i}", classes="accept-button"),
-                        Button("Reject", id=f"reject-{i}", classes="reject-button"),
-                        id=f"buttons-{i}",
-                        classes="line-buttons"
-                    ),
-                    id=f"line-container-{i}",
-                    classes="line-container"
-                )
-                file2_content.mount(line_container)
-            else:
-                line_container = Container(
-                    Static(display_line, classes=diff_type, id=f"file2-line-{i}", markup=True),
-                    id=f"line-container-{i}",
-                    classes="line-container"
-                )
-                file2_content.mount(line_container)
-        
-    def load_files_and_calculate_diff(self) -> None:
-        """Load the two files and calculate their diff."""
-        try:
-            with open(self.file1_path, 'r') as f1:
-                self.file1_lines = f1.readlines()
-            with open(self.file2_path, 'r') as f2:
-                self.file2_lines = f2.readlines()
-                
-            # Calculate diff using SequenceMatcher
-            self.calculate_line_diffs()
-            
-        except Exception as e:
-            # Create error displays for both panels
-            self.line_diffs_file1 = [("error", f"Error loading files: {e}")]
-            self.line_diffs_file2 = [("error", f"Error loading files: {e}")]
-            
-    def refresh_diff_view(self) -> None:
-        """Refresh the diff view after saving changes."""
-        # Clear existing content
-        file1_content = self.query_one("#file1-content", Vertical)
-        file2_content = self.query_one("#file2-content", Vertical)
-        
-        # Remove all existing widgets
-        file1_content.remove_children()
-        file2_content.remove_children()
-        
-        # Repopulate with new diff content
-        for i, (diff_type, line) in enumerate(self.line_diffs_file1):
-            display_line = line if line else " "
-            file1_content.mount(Static(display_line, classes=diff_type, id=f"file1-line-{i}", markup=True))
-            
-        for i, (diff_type, line) in enumerate(self.line_diffs_file2):
-            display_line = line if line else " "
-            
-            # For modified lines, create a container with the line and accept/reject buttons
-            if diff_type in ["added", "changed"]:
-                line_container = Container(
-                    Static(display_line, classes=diff_type, id=f"file2-line-{i}", markup=True),
-                    Horizontal(
-                        Button("Accept", id=f"accept-{i}", classes="accept-button"),
-                        Button("Reject", id=f"reject-{i}", classes="reject-button"),
-                        id=f"buttons-{i}",
-                        classes="line-buttons"
-                    ),
-                    id=f"line-container-{i}",
-                    classes="line-container"
-                )
-                file2_content.mount(line_container)
-            else:
-                line_container = Container(
-                    Static(display_line, classes=diff_type, id=f"file2-line-{i}", markup=True),
-                    id=f"line-container-{i}",
-                    classes="line-container"
-                )
-                file2_content.mount(line_container)
-            
-    def calculate_line_diffs(self) -> None:
-        """Calculate differences between the two files line by line."""
-        matcher = SequenceMatcher(None, self.file1_lines, self.file2_lines)
-        
-        # Initialize with all lines as unchanged
-        self.line_diffs_file1 = [("unchanged", line.rstrip()) for line in self.file1_lines]
-        self.line_diffs_file2 = [("unchanged", line.rstrip()) for line in self.file2_lines]
-        
-        # Apply diff tags based on matcher results
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == 'delete':
-                # Mark lines in file1 as removed
-                for i in range(i1, i2):
-                    self.line_diffs_file1[i] = ("removed", self.line_diffs_file1[i][1])
-            elif tag == 'insert':
-                # Mark lines in file2 as added
-                for j in range(j1, j2):
-                    self.line_diffs_file2[j] = ("added", self.line_diffs_file2[j][1])
-            elif tag == 'replace':
-                # For replacement, treat as changed lines when same number of lines
-                # or separate delete/insert when different number of lines
-                
-                # Number of lines changed in each file
-                file1_changes = i2 - i1
-                file2_changes = j2 - j1
-                
-                if file1_changes == file2_changes:
-                    # Same number of lines - treat as changed lines and compute inline diffs
-                    for i, j in zip(range(i1, i2), range(j1, j2)):
-                        if i < len(self.line_diffs_file1) and j < len(self.line_diffs_file2):
-                            # Compute inline diff for these lines
-                            inline_diff1, inline_diff2 = self.compute_inline_diff(
-                                self.line_diffs_file1[i][1], 
-                                self.line_diffs_file2[j][1]
-                            )
-                            self.line_diffs_file1[i] = ("changed", inline_diff1)
-                            self.line_diffs_file2[j] = ("changed", inline_diff2)
-                else:
-                    # Different number of lines - mark as removed in file1 and added in file2
-                    for i in range(i1, i2):
-                        if i < len(self.line_diffs_file1):
-                            self.line_diffs_file1[i] = ("removed", self.line_diffs_file1[i][1])
-                    for j in range(j1, j2):
-                        if j < len(self.line_diffs_file2):
-                            self.line_diffs_file2[j] = ("added", self.line_diffs_file2[j][1])
-                    
-    def compute_inline_diff(self, line1: str, line2: str) -> tuple:
-        """Compute character-level differences between two lines and return marked up strings
-        in GitKraken style with inline highlighting."""
-        # For unchanged lines, return as is
-        if line1 == line2:
-            return line1, line2
-            
-        # Create a SequenceMatcher for character-level differences
-        char_matcher = SequenceMatcher(None, line1, line2)
-        
-        # For GitKraken-style inline diff, we show both old and new text in the modified file panel
-        # The original file panel shows the original text
-        # The modified file panel shows the new text with inline changes
-        
-        # Build marked up string for the modified file (file2)
-        marked_line2 = ""
-        
-        # Process changes to build the inline diff for file2
-        for tag, i1, i2, j1, j2 in char_matcher.get_opcodes():
-            if tag == 'equal':
-                # Common text - add without markup
-                marked_line2 += line2[j1:j2]
-            elif tag == 'delete':
-                # Text removed from line1 - mark in red with strike-through
-                marked_line2 += f"[red strike]{line1[i1:i2]}[/red strike]"
-            elif tag == 'insert':
-                # Text added to line2 - mark in green
-                marked_line2 += f"[green]{line2[j1:j2]}[/green]"
-            elif tag == 'replace':
-                # Text replaced - mark old in red with strike-through and new in green
-                marked_line2 += f"[red strike]{line1[i1:i2]}[/red strike]" + f"[green]{line2[j1:j2]}[/green]"
-                
-        return line1, marked_line2
-        
-    def compose_file_content(self, file_type: str) -> ComposeResult:
-        """Compose file content with diff highlighting."""
-        if file_type == "file1":
-            for diff_type, line in self.line_diffs_file1:
-                # Handle empty lines by adding a space
-                display_line = line if line else " "
-                yield Static(display_line, classes=diff_type)
-        else:  # file2
-            for diff_type, line in self.line_diffs_file2:
-                # Handle empty lines by adding a space
-                display_line = line if line else " "
-                yield Static(display_line, classes=diff_type)
-        
+        self.dark = True
+        self.gac_integration = None
+        self.git_sidebar = GitStatusSidebar(repo_path)
+        self.gac_integration = GACIntegration(self.git_sidebar)
+        self.current_file = None
+        self.current_commit = None
+        self.file_tree = None
+        self.current_is_staged = None
+        self._current_displayed_file = None
+        self._current_displayed_is_staged = None
+
     def compose(self) -> ComposeResult:
-        """Create the UI layout with split-screen view and professional control panel."""
+        """Create the UI layout with three-panel view: file tree, diff view, and commit history."""
         yield Header()
         
-        # Professional control panel with better button arrangement
-        yield Container(
-            Button("Accept All", id="accept-all"),
-            Button("Reject All", id="reject-all"),
-            Button("Save Changes", id="save-changes"),
-            id="control-panel"
-        )
-        
         yield Horizontal(
+            # Left panel - File tree
             Vertical(
-                Static(f"Original File: {self.file1_path}", id="file1-header"),
-                Vertical(id="file1-content"),
+                AnimatedLogo(),
+                Static("File Tree", id="sidebar-header", classes="panel-header"),
+                Tree(os.path.basename(os.getcwd()), id="file-tree"),
+                id="sidebar"
             ),
+            # Center panel - Tabbed diff view and commit history
             Vertical(
-                Static(f"Modified File: {self.file2_path}", id="file2-header"),
-                Vertical(id="file2-content"),
+                GitDiffHistoryTabs(),
+                id="diff-panel"
             ),
+            # Right panel - Git status functionality
+            Vertical(
+                # Top pane - Unstaged changes
+                Vertical(
+                    Static("Unstaged Changes", classes="panel-header"),
+                    Static("Hint: Select a file and press 's' to stage the entire file", classes="hint"),
+                    Tree("Unstaged", id="unstaged-tree"),
+                    id="unstaged-panel"
+                ),
+                # Middle pane - Staged changes
+                Vertical(
+                    Static("Staged Changes", classes="panel-header"),
+                    Tree("Staged", id="staged-tree"),
+                    id="staged-panel"
+                ),
+                # Bottom pane - Commit functionality
+                Vertical(
+                    Label("Commit Message (Subject):", classes="commit-label"),
+                    Horizontal(
+                        Input(placeholder="Enter commit message...", id="commit-message", classes="commit-input"),
+                        Button("GAC", id="gac-button", classes="gac-button"),
+                        classes="commit-message-row"
+                    ),
+                    Label("Commit Details (Body):", classes="commit-label"),
+                    TextArea(placeholder="Enter detailed description (optional)...", id="commit-body", classes="commit-body"),
+                    Button("Commit", id="commit-button", classes="commit-button"),
+                    id="commit-section",
+                    classes="commit-section"
+                ),
+                id="status-panel"
+            ),
+            id="main-content"
         )
         yield Footer()
+        
+    def on_mount(self) -> None:
+        """Initialize the UI when app mounts."""
+        self.populate_file_tree()
+        self.populate_unstaged_changes()
+        self.populate_staged_changes()
+        self.populate_commit_history()
+        
+        # If no files are selected, show a message in the diff panel
+        try:
+            diff_content = self.query_one("#diff-content", VerticalScroll)
+            if not diff_content.children:
+                diff_content.mount(Static("Select a file from the tree to view its diff", classes="info"))
+        except Exception:
+            pass
+        try:
+            history_content = self.query_one("#history-content", VerticalScroll)
+            if not history_content.children:
+                history_content.mount(Static("No commit history available", classes="info"))
+        except Exception:
+            pass
+            
+    def populate_branch_dropdown(self) -> None:
+        """Populate the branch dropdown with all available branches."""
+        try:
+            # Get the select widget
+            branch_select = self.query_one("#branch-select", Select)
+            
+            # Get all branches
+            branches = self.git_sidebar.get_all_branches()
+            current_branch = self.git_sidebar.get_current_branch()
+            
+            # Create options for the select widget
+            options = [(branch, branch) for branch in branches]
+            
+            # Set the options and default value
+            branch_select.set_options(options)
+            branch_select.value = current_branch
+            
+        except Exception as e:
+            # If we can't populate branches, that's okay - continue without it
+            pass
+            
+    def action_show_branch_switcher(self) -> None:
+        """Show the branch switcher modal."""
+        modal = BranchSwitchModal(self.git_sidebar)
+        self.push_screen(modal)
+        
+    def action_refresh_branches(self) -> None:
+        """Refresh the branch dropdown menu."""
+        self.populate_branch_dropdown()
+        self.notify("Branch list refreshed", severity="information")
         
     def action_quit(self) -> None:
         """Quit the application with a message."""
         self.exit("Thanks for using GitDiffViewer!")
         
-    def action_toggle_dark(self) -> None:
-        """Toggle dark mode."""
-        self.dark = not self.dark
+    def on_unstaged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle unstaged tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged=False)
+            
+    def on_staged_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle staged tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged=True)
+            
+    def on_unstaged_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle unstaged tree node highlighting to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged=False)
+
+    def on_staged_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle staged tree node highlighting to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged=True)
+            
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle tree node selection to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            status = node_data.get("status", "unchanged")
+            is_staged = (status == "staged")
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged)
+            
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle tree node highlighting to display file diffs."""
+        node_data = event.node.data
+        
+        if node_data and isinstance(node_data, dict) and "path" in node_data:
+            file_path = node_data["path"]
+            status = node_data.get("status", "unchanged")
+            is_staged = (status == "staged")
+            self.current_file = file_path
+            self.display_file_diff(file_path, is_staged)
+            
+    def _reverse_sanitize_path(self, sanitized_path: str) -> str:
+        """Reverse the sanitization of a file path.
+        
+        Args:
+            sanitized_path: The sanitized path with encoded characters
+            
+        Returns:
+            The original file path
+        """
+        return sanitized_path.replace('__SLASH__', '/').replace('__SPACE__', ' ').replace('__DOT__', '.')
         
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press events."""
+        """Handle button press events for hunk operations and commit."""
         button_id = event.button.id
         
-        if button_id == "accept-all":
-            self.accept_all_changes()
-        elif button_id == "reject-all":
-            self.reject_all_changes()
-        elif button_id == "save-changes":
-            self.save_changes()
-        elif button_id.startswith("accept-"):
-            line_index = int(button_id.split("-")[-1])
-            self.accept_single_change(line_index)
-        elif button_id.startswith("reject-"):
-            line_index = int(button_id.split("-")[-1])
-            self.reject_single_change(line_index)
-            
-    def accept_all_changes(self) -> None:
-        """Accept all changes in the diff view."""
-        # Mark all changes as accepted
-        for i, (diff_type, line) in enumerate(self.line_diffs_file2):
-            if diff_type in ["added", "changed"] and i not in self.accepted_changes:
-                self.accepted_changes.append(i)
+        if button_id.startswith("stage-hunk-"):
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
+                hunk_index = int(parts[2])
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
+                self.stage_hunk(file_path, hunk_index)
                 
-        # Update UI to reflect accepted changes
-        for i in self.accepted_changes:
+        elif button_id.startswith("unstage-hunk-"):
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
+                hunk_index = int(parts[2])
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
+                self.unstage_hunk(file_path, hunk_index)
+                
+        elif button_id.startswith("discard-hunk-"):
+            # Extract hunk index and file path (ignoring the timestamp at the end)
+            parts = button_id.split("-")
+            if len(parts) >= 4:
+                hunk_index = int(parts[2])
+                # Join parts 3 through second-to-last (excluding timestamp)
+                sanitized_file_path = "-".join(parts[3:-1])
+                file_path = self._reverse_sanitize_path(sanitized_file_path)
+                self.discard_hunk(file_path, hunk_index)
+                
+        elif button_id == "commit-button":
+            self.action_commit()
+            
+        elif button_id == "gac-button":
+            self.action_gac_generate()
+            
+
+            
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Handle branch selection changes."""
+        if event.select.id == "branch-select":
+            branch_name = event.value
+            if branch_name:
+                # Check if repo is dirty before switching
+                if self.git_sidebar.is_dirty():
+                    self.notify("Cannot switch branches with uncommitted changes. Please commit or discard changes first.", severity="error")
+                    # Reset to current branch
+                    current_branch = self.git_sidebar.get_current_branch()
+                    event.select.value = current_branch
+                else:
+                    # Attempt to switch branch
+                    success = self.git_sidebar.switch_branch(branch_name)
+                    if success:
+                        self.notify(f"Switched to branch: {branch_name}", severity="information")
+                        # Refresh the UI
+                        self.populate_branch_dropdown()
+                        self.populate_file_tree()
+                        self.populate_commit_history()
+                    else:
+                        self.notify(f"Failed to switch to branch: {branch_name}", severity="error")
+                        # Reset to current branch
+                        current_branch = self.git_sidebar.get_current_branch()
+                        event.select.value = current_branch
+            
+    def action_refresh_branches(self) -> None:
+        """Refresh the branch dropdown menu."""
+        self.populate_branch_dropdown()
+        self.notify("Branch list refreshed", severity="information")
+        
+    def populate_file_tree(self) -> None:
+        """Populate the file tree sidebar with all files and their git status."""
+        if not self.git_sidebar.repo:
+            return
+            
+        try:
+            # Get the tree widget
+            tree = self.query_one("#file-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Automatically expand the root node
+            tree.root.expand()
+            
+            # Get all files in the repository with their statuses
+            file_tree = self.git_sidebar.get_file_tree()
+            
+            # Sort file_tree so directories are processed first
+            file_tree.sort(key=lambda x: (x[1] != "directory", x[0]))
+            
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
+            # Add all files and directories
+            for file_path, file_type, git_status in file_tree:
+                parts = file_path.split('/')
+                
+                for i in range(len(parts)):
+                    # For directories, we need to process all parts
+                    # For files, we need to process all parts except the last one (handled separately)
+                    if file_type == "directory" or i < len(parts) - 1:
+                        parent_path = "/".join(parts[:i])
+                        current_path = "/".join(parts[:i+1])
+                        
+                        # Create node if it doesn't exist
+                        if current_path not in directory_nodes:
+                            parent_node = directory_nodes[parent_path]
+                            new_node = parent_node.add(parts[i], expand=True)
+                            new_node.label.stylize("bold blue")  # Color directories blue
+                            directory_nodes[current_path] = new_node
+                
+                # For files, add as leaf node under the appropriate directory
+                if file_type == "file":
+                    # Get the parent directory node
+                    parent_dir_path = "/".join(parts[:-1])
+                    parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                    
+                    leaf_node = parent_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
+                    # Apply specific text colors based on git status
+                    if git_status == "staged":
+                        leaf_node.label.stylize("bold green")
+                    elif git_status == "modified":
+                        leaf_node.label.stylize("bold red")
+                    elif git_status == "untracked":
+                        leaf_node.label.stylize("bold purple")
+                    else:  # unchanged
+                        leaf_node.label.stylize("default")
+                
+        except Exception as e:
+            # Show error in diff panel
             try:
-                accept_button = self.query_one(f"#accept-{i}", Button)
-                accept_button.label = "Undo"
-                accept_button.add_class("accepted-button")
-                accept_button.remove_class("accept-button")
-            except:
-                # Button might not exist for some lines
+                diff_content = self.query_one("#diff-content", VerticalScroll)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating file tree: {e}", classes="error"))
+            except Exception:
+                # If we can't even show the error, that's okay - just continue without it
+                pass
+
+    def populate_unstaged_changes(self) -> None:
+        """Populate the unstaged changes tree in the right sidebar."""
+        if not self.git_sidebar.repo:
+            return
+            
+        try:
+            # Get the unstaged tree widget
+            tree = self.query_one("#unstaged-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Automatically expand the root node
+            tree.root.expand()
+            
+            # Get unstaged files (modified and untracked)
+            unstaged_files = self.git_sidebar.get_files_with_unstaged_changes()
+            
+            # Sort unstaged_files so directories are processed first
+            unstaged_files.sort()
+            
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
+            # Add unstaged files to tree with directory structure
+            for file_path in unstaged_files:
+                parts = file_path.split('/')
+                file_name = parts[-1]
+                
+                # Determine file status
+                if file_path in self.git_sidebar.get_untracked_files():
+                    status = "untracked"
+                else:
+                    status = "modified"
+                
+                # Build intermediate directory nodes as needed
+                for i in range(len(parts) - 1):
+                    parent_path = "/".join(parts[:i])
+                    current_path = "/".join(parts[:i+1])
+                    
+                    # Create node if it doesn't exist
+                    if current_path not in directory_nodes:
+                        parent_node = directory_nodes[parent_path]
+                        new_node = parent_node.add(parts[i], expand=True)
+                        new_node.label.stylize("bold blue")  # Color directories blue
+                        directory_nodes[current_path] = new_node
+                
+                # Add file as leaf node under the appropriate directory
+                parent_dir_path = "/".join(parts[:-1])
+                parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                
+                leaf_node = parent_node.add_leaf(file_name, data={"path": file_path, "status": status})
+                
+                # Apply styling based on status
+                if status == "modified":
+                    leaf_node.label.stylize("bold red")
+                else:  # untracked
+                    leaf_node.label.stylize("bold purple")
+                
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", VerticalScroll)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating unstaged changes: {e}", classes="error"))
+            except Exception:
+                pass
+
+    def populate_staged_changes(self) -> None:
+        """Populate the staged changes tree in the right sidebar."""
+        if not self.git_sidebar.repo:
+            return
+            
+        try:
+            # Get the staged tree widget
+            tree = self.query_one("#staged-tree", Tree)
+            
+            # Clear existing tree
+            tree.clear()
+            
+            # Automatically expand the root node
+            tree.root.expand()
+            
+            # Get staged files
+            staged_files = self.git_sidebar.get_staged_files()
+            
+            # Sort staged_files so directories are processed first
+            staged_files.sort()
+            
+            # Keep track of created directory nodes to avoid duplicates
+            directory_nodes = {"": tree.root}  # Empty string maps to root node
+            
+            # Add staged files with directory structure
+            for file_path in staged_files:
+                parts = file_path.split('/')
+                file_name = parts[-1]
+                
+                # Build intermediate directory nodes as needed
+                for i in range(len(parts) - 1):
+                    parent_path = "/".join(parts[:i])
+                    current_path = "/".join(parts[:i+1])
+                    
+                    # Create node if it doesn't exist
+                    if current_path not in directory_nodes:
+                        parent_node = directory_nodes[parent_path]
+                        new_node = parent_node.add(parts[i], expand=True)
+                        new_node.label.stylize("bold blue")  # Color directories blue
+                        directory_nodes[current_path] = new_node
+                
+                # Add file as leaf node under the appropriate directory
+                parent_dir_path = "/".join(parts[:-1])
+                parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
+                
+                leaf_node = parent_node.add_leaf(file_name, data={"path": file_path, "status": "staged"})
+                leaf_node.label.stylize("bold green")
+                
+        except Exception as e:
+            # Show error in diff panel
+            try:
+                diff_content = self.query_one("#diff-content", VerticalScroll)
+                diff_content.remove_children()
+                diff_content.mount(Static(f"Error populating staged changes: {e}", classes="error"))
+            except Exception:
                 pass
             
-        # Show notification
-        self.notify("All changes accepted", severity="information")
-            
-    def reject_all_changes(self) -> None:
-        """Reject all changes in the diff view."""
-        # Clear all accepted changes
-        self.accepted_changes.clear()
-        
-        # Update UI to reflect rejected changes
+    def stage_hunk(self, file_path: str, hunk_index: int) -> None:
+        """Stage a specific hunk of a file."""
         try:
-            buttons = self.query("Button")
-            for button in buttons:
-                if button.id and button.id.startswith("accept-"):
-                    button.label = "Accept"
-                    button.add_class("accept-button")
-                    button.remove_class("accepted-button")
-        except:
-            # No buttons found
+            success = self.git_sidebar.stage_hunk(file_path, hunk_index)
+            
+            if success:
+                self.notify(f"Staged hunk in {file_path}", severity="information")
+                
+                # Clear any cached diff state
+                if hasattr(self, '_current_displayed_file'):
+                    delattr(self, '_current_displayed_file')
+                if hasattr(self, '_current_displayed_is_staged'):
+                    delattr(self, '_current_displayed_is_staged')
+                
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                
+                if self.current_file:
+                    # Always stay in the current view after staging a hunk
+                    # This prevents unwanted view switching when staging individual hunks
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+            else:
+                self.notify(f"Failed to stage {file_path}", severity="error")
+                
+        except Exception as e:
+            self.notify(f"Error staging hunk: {e}", severity="error")
+
+    def stage_file(self, file_path: str) -> None:
+        """Stage all changes in a file."""
+        try:
+            success = self.git_sidebar.stage_file(file_path)
+            if success:
+                self.notify(f"Staged all changes in {file_path}", severity="information")
+                # Refresh trees
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                # If we were viewing this file, switch to staged view for it
+                if self.current_file == file_path:
+                    self.display_file_diff(file_path, is_staged=True, force_refresh=True)
+            else:
+                self.notify(f"Failed to stage all changes in {file_path}", severity="error")
+        except Exception as e:
+            self.notify(f"Error staging file: {e}", severity="error")
+            
+    def unstage_hunk(self, file_path: str, hunk_index: int) -> None:
+        """Unstage a specific hunk of a file."""
+        try:
+            # For this implementation, we'll unstage the entire file
+            # A more advanced implementation would unstage only the specific hunk
+            success = self.git_sidebar.unstage_hunk(file_path, hunk_index)
+            
+            if success:
+                self.notify(f"Unstaged hunk in {file_path}", severity="information")
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                if self.current_file:
+                    # Stay in the current view after unstaging a hunk
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+            else:
+                self.notify(f"Failed to unstage {file_path}", severity="error")
+                
+        except Exception as e:
+            self.notify(f"Error unstaging hunk: {e}", severity="error")
+            
+    def discard_hunk(self, file_path: str, hunk_index: int) -> None:
+        """Discard changes in a specific hunk of a file."""
+        try:
+            success = self.git_sidebar.discard_hunk(file_path, hunk_index)
+            
+            if success:
+                self.notify(f"Discarded hunk in {file_path}", severity="information")
+                
+                # Clear any cached diff state
+                if hasattr(self, '_current_displayed_file'):
+                    delattr(self, '_current_displayed_file')
+                if hasattr(self, '_current_displayed_is_staged'):
+                    delattr(self, '_current_displayed_is_staged')
+                
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+            else:
+                self.notify(f"Failed to discard changes in {file_path}", severity="error")
+                
+        except Exception as e:
+            self.notify(f"Error discarding hunk: {e}", severity="error")
+            
+    def populate_commit_history(self) -> None:
+        """Populate the commit history tab."""
+        try:
+            history_content = self.query_one("#history-content", VerticalScroll)
+            history_content.remove_children()
+            
+            branch_name = self.git_sidebar.get_current_branch()
+            commits = self.git_sidebar.get_commit_history()
+            
+            for commit in commits:
+                # Display branch, commit ID, author, and message with colors that match our theme
+                commit_text = f"[#87CEEB]{branch_name}[/#87CEEB] [#E0FFFF]{commit.sha}[/#E0FFFF] [#00BFFF]{commit.author}[/#00BFFF]: {commit.message}"
+                commit_line = CommitLine(commit_text, classes="info")
+                history_content.mount(commit_line)
+                
+        except Exception:
             pass
             
-        # Show notification
-        self.notify("All changes rejected", severity="information")
-                
-    def accept_single_change(self, line_index: int) -> None:
-        """Accept a single change by line index."""
-        if line_index not in self.accepted_changes:
-            self.accepted_changes.append(line_index)
+
             
-            # Update button to show it's accepted
-            accept_button = self.query_one(f"#accept-{line_index}", Button)
-            accept_button.label = "Undo"
-            accept_button.add_class("accepted-button")
-            accept_button.remove_class("accept-button")
-        else:
-            # If already accepted, unaccept it
-            self.accepted_changes.remove(line_index)
+    def display_file_diff(self, file_path: str, is_staged: bool = False, force_refresh: bool = False) -> None:
+        """Display the diff for a selected file in the diff panel with appropriate buttons."""
+        # Skip if this is the same file we're already displaying (unless force_refresh is True)
+        if not force_refresh and hasattr(self, '_current_displayed_file') and self._current_displayed_file == file_path and self._current_displayed_is_staged == is_staged:
+            return
+        self.current_is_staged = is_staged
             
-            # Update button to show it's no longer accepted
-            accept_button = self.query_one(f"#accept-{line_index}", Button)
-            accept_button.label = "Accept"
-            accept_button.add_class("accept-button")
-            accept_button.remove_class("accepted-button")
-            
-    def reject_single_change(self, line_index: int) -> None:
-        """Reject a single change by line index."""
-        if line_index in self.accepted_changes:
-            self.accepted_changes.remove(line_index)
-            
-            # Update accept button to show it's no longer accepted
-            accept_button = self.query_one(f"#accept-{line_index}", Button)
-            accept_button.label = "Accept"
-            accept_button.add_class("accept-button")
-            accept_button.remove_class("accepted-button")
-            
-            # No need to update reject button styling as it doesn't change state
-            
-    def save_changes(self) -> None:
-        """Save accepted changes to file1 and refresh the diff view."""
         try:
-            # Create a new version of file1 with accepted changes
-            new_file1_lines = []
+            diff_content = self.query_one("#diff-content", VerticalScroll)
+            # Ensure we're starting with a clean slate
+            diff_content.remove_children()
             
-            matcher = SequenceMatcher(None, self.file1_lines, self.file2_lines)
-            opcodes = list(matcher.get_opcodes())
+            # Track which file we're currently displaying
+            self._current_displayed_file = file_path
+            self._current_displayed_is_staged = is_staged
             
-            # Process each opcode to build the new file1
-            for tag, i1, i2, j1, j2 in opcodes:
-                if tag == 'equal':
-                    # Add unchanged lines from file1
-                    new_file1_lines.extend(self.file1_lines[i1:i2])
-                elif tag == 'delete':
-                    # Skip deleted lines (they're removed in file2)
-                    pass
-                elif tag == 'insert':
-                    # Add inserted lines if they were accepted
-                    for j in range(j1, j2):
-                        if j in self.accepted_changes:
-                            new_file1_lines.append(self.file2_lines[j])
-                elif tag == 'replace':
-                    # Check if any replacement lines were accepted
-                    replacement_indices = list(range(j1, j2))
-                    accepted_in_replacement = [j for j in replacement_indices if j in self.accepted_changes]
-                    
-                    if accepted_in_replacement:
-                        # Add only the accepted lines from file2
-                        for j in replacement_indices:
-                            if j in self.accepted_changes:
-                                new_file1_lines.append(self.file2_lines[j])
-                    else:
-                        # If no lines were accepted, keep original lines from file1
-                        new_file1_lines.extend(self.file1_lines[i1:i2])
-                    
-            # Save to file1
-            with open(self.file1_path, 'w') as f1:
-                f1.writelines(new_file1_lines)
+            # Get file status to determine which buttons to show
+            hunks = self.git_sidebar.get_diff_hunks(file_path, staged=is_staged)
+            
+            if not hunks:
+                diff_content.mount(Static("No changes to display", classes="info"))
+                return
                 
-            # Clear accepted changes since we've saved them
-            self.accepted_changes.clear()
+            # Generate a unique timestamp for this refresh to avoid ID collisions
+            refresh_id = str(int(time.time() * 1000000))  # microsecond timestamp
             
-            # Refresh the diff view so buttons reset
-            self.load_files_and_calculate_diff()
-            self.refresh_diff_view()
-            
-            # Reset accept button styles (reject buttons don't change state)
-            try:
-                buttons = self.query("Button")
-                for button in buttons:
-                    if button.id and button.id.startswith("accept-"):
-                        button.label = "Accept"
-                        button.add_class("accept-button")
-                        button.remove_class("accepted-button")
-            except:
-                # No buttons found
-                pass
-            
-            # Show success message
-            self.notify("Changes saved successfully to file 1!", severity="information")
-            
+            # Display each hunk
+            for i, hunk in enumerate(hunks):
+                # Create all the widgets for this hunk first
+                hunk_widgets = [Static(hunk.header, classes="hunk-header")]
+                
+                # Determine if we should apply diff highlighting
+                # Apply highlighting for staged, modified, and untracked files
+                apply_diff_highlighting = True
+                
+                # Add lines to the hunk widgets list
+                for line in hunk.lines:
+                    if apply_diff_highlighting and line:
+                        # Determine line type based on the first character only
+                        if line[:1] == '+':  # Added line
+                            classes = "added"
+                        elif line[:1] == '-':  # Removed line
+                            classes = "removed"
+                        else:
+                            classes = "unchanged"
+                    else:
+                        # Disable highlighting altogether if we're not in a diff
+                        classes = "unchanged"
+                    
+                    # Escape any markup characters in the line content
+                    escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
+                    line_widget = Static(escaped_line, classes=classes)
+                    hunk_widgets.append(line_widget)
+                
+                # Add appropriate action buttons for the hunk based on file status
+                # Sanitize file path for use in ID (replace invalid characters with reversible encodings)
+                sanitized_file_path = file_path.replace('/', '__SLASH__').replace(' ', '__SPACE__').replace('.', '__DOT__')
+                if is_staged:
+                    buttons = Horizontal(
+                        Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="unstage-button"),
+                        classes="hunk-buttons"
+                    )
+                else:
+                    buttons = Horizontal(
+                        Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="stage-button"),
+                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="discard-button"),
+                        classes="hunk-buttons"
+                    )
+                hunk_widgets.append(buttons)
+                
+                # Create the complete container with all widgets
+                # Include file_path and staging status in hunk_container ID to prevent collisions
+                hunk_container = Container(*hunk_widgets, id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="hunk-container")
+                
+                # Mount the complete hunk container
+                diff_content.mount(hunk_container)
+                
         except Exception as e:
-            self.notify(f"Error saving changes: {e}", severity="error")
+            self.notify(f"Error displaying diff: {e}", severity="error")
+            
+    def action_commit(self) -> None:
+        """Commit staged changes with a commit message from the UI."""
+        try:
+            # Get the commit message input widgets
+            commit_input = self.query_one("#commit-message", Input)
+            commit_body = self.query_one("#commit-body", TextArea)
+            
+            subject = commit_input.value.strip()
+            body = commit_body.text.strip()
+            
+            # Combine subject and body for full commit message
+            message = subject
+            if body:
+                message = f"{subject}\n\n{body}"
+            
+            # Check if there's a commit message
+            if not subject:
+                self.notify("Please enter a commit message", severity="warning")
+                return
+                
+            # Check if there are staged changes
+            staged_files = self.git_sidebar.get_staged_files()
+            if not staged_files:
+                self.notify("No staged changes to commit", severity="warning")
+                return
+                
+            # Attempt to commit staged changes
+            success = self.git_sidebar.commit_staged_changes(message)
+            
+            if success:
+                self.notify(f"Successfully committed changes with message: {message}", severity="information")
+                # Clear the commit message inputs
+                commit_input.value = ""
+                commit_body.text = ""
+                # Refresh the UI
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                self.populate_commit_history()
+            else:
+                self.notify("Failed to commit changes", severity="error")
+                
+        except Exception as e:
+            self.notify(f"Error committing changes: {e}", severity="error")
+    
+    def action_gac_config(self) -> None:
+        """Show GAC configuration modal."""
+        def handle_config_result(result):
+            # Refresh GAC integration after config changes
+            self.gac_integration = GACIntegration(self.git_sidebar)
+            
+        self.push_screen(GACConfigModal(), handle_config_result)
+    
+    def action_stage_selected_file(self) -> None:
+        """Stage the entire currently selected file from any file tree if it is unstaged/untracked."""
+        try:
+            if not self.current_file:
+                self.notify("No file selected", severity="warning")
+                return
+            status = self.git_sidebar.get_file_status(self.current_file)
+            # Allow staging even if file is partially staged; block only if unchanged
+            if status == "unchanged":
+                self.notify("Selected file has no changes", severity="information")
+                return
+            self.stage_file(self.current_file)
+        except Exception as e:
+            self.notify(f"Error staging selected file: {e}", severity="error")
+
+    def action_unstage_selected_file(self) -> None:
+        """Unstage all changes for the selected file (if staged)."""
+        try:
+            if not self.current_file:
+                self.notify("No file selected", severity="warning")
+                return
+            status = self.git_sidebar.get_file_status(self.current_file)
+            if status != "staged":
+                self.notify("Selected file is not staged", severity="information")
+                return
+            if hasattr(self.git_sidebar, 'unstage_file_all') and callable(self.git_sidebar.unstage_file_all):
+                success = self.git_sidebar.unstage_file_all(self.current_file)
+            else:
+                # Fallback: remove entire file from index
+                success = self.git_sidebar.unstage_file(self.current_file)
+            if success:
+                self.notify(f"Unstaged all changes in {self.current_file}", severity="information")
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+                # If we were viewing this file, show unstaged diff now
+                if self.current_file:
+                    self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
+            else:
+                self.notify(f"Failed to unstage {self.current_file}", severity="error")
+        except Exception as e:
+            self.notify(f"Error unstaging selected file: {e}", severity="error")
+
+    def action_gac_generate(self) -> None:
+        """Generate commit message using GAC and populate the commit message fields (no auto-commit)."""
+        try:
+            if not self.gac_integration.is_configured():
+                self.notify("🤖 GAC is not configured. Press Ctrl+G to configure it first.", severity="warning")
+                return
+            
+            # Check if there are staged changes
+            staged_files = self.git_sidebar.get_staged_files()
+            if not staged_files:
+                self.notify("No staged changes to generate commit message for", severity="warning")
+                return
+            
+            # Show generating message
+            self.notify("🤖 Generating commit message with GAC...", severity="information")
+            
+            # Generate commit message
+            try:
+                commit_message = self.gac_integration.generate_commit_message(
+                    staged_only=True,
+                    one_liner=False
+                )
+                
+                if commit_message:
+                    # Parse the commit message into subject and body
+                    lines = commit_message.strip().split('\n', 1)
+                    subject = lines[0].strip()
+                    body = lines[1].strip() if len(lines) > 1 else ""
+                    
+                    # Populate the commit message inputs
+                    try:
+                        commit_input = self.query_one("#commit-message", Input)
+                        commit_body = self.query_one("#commit-body", TextArea)
+                        
+                        commit_input.value = subject
+                        commit_body.text = body
+                        
+                        self.notify(f"✅ GAC generated commit message: {subject[:50]}...", severity="information")
+                        
+                    except Exception as e:
+                        self.notify(f"Generated message but failed to populate fields: {e}", severity="warning")
+                else:
+                    self.notify("❌ GAC failed to generate a commit message", severity="error")
+                    
+            except Exception as e:
+                self.notify(f"❌ Failed to generate commit message: {e}", severity="error")
+                
+        except Exception as e:
+            self.notify(f"❌ Error with GAC integration: {e}", severity="error")

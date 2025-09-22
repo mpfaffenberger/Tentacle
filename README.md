@@ -1,108 +1,140 @@
-# Tentacle
+# Tentacle 🐙
 
-A professional Textual-based application for viewing differences between two text files and selectively accepting changes.
+A powerful Textual-based TUI (Terminal User Interface) for viewing and managing git diffs with **AI-powered commit message generation** using GAC (Git Auto Commit).
 
-## Project Structure
+## ✨ Features
 
-The project is organized as a proper Python package:
+### Core Git Features
+- **Three-panel UI**: File tree, diff viewer, and git status
+- **Hunk-based staging**: Stage, unstage, or discard individual hunks
+- **Branch management**: View, switch between branches
+- **Commit history**: Browse commit history with details
+- **Real-time git status**: Color-coded file status indicators
 
-- `tentacle/` - Main package directory
-  - `main.py` - Entry point module
-  - `git_diff_viewer.py` - Core application logic
+### 🤖 AI-Powered Commits with GAC
+- **AI-generated commit messages**: Press `g` to generate a suggested commit message (no auto-commit)
+- **Multiple AI providers**: OpenAI, Anthropic, Cerebras, Groq, Ollama support
+- **Smart configuration**: Easy setup through built-in modal (Ctrl+G)
+- **Context-aware**: Generates messages based on your actual code changes
 
-## Development
+## 🎨 Git Status Colors
 
-This project uses `uv` for package management and virtual environment handling. You can run the application directly using `uv run tentacle` command.
+- **🟢 Green**: Staged files (ready to commit)
+- **🟡 Yellow**: Modified files (unstaged changes)
+- **🔵 Blue**: Directories
+- **🟣 Purple**: Untracked files
+- **🔴 Red**: Deleted files
 
-To run with Python directly:
+## 🚀 Usage
+
 ```bash
-python -m tentacle <file1> <file2>
+# Run Tentacle with UV (recommended)
+uv run tentacle [repo_path]
+
+# Or run directly with Python module syntax
+uv run python -m tentacle.main [repo_path]
 ```
 
+## ⌨️ Controls
 
-## Features
+### Basic Navigation
+- `q` - Quit the application
+- `Ctrl+d` - Toggle dark mode
+- `r` - Refresh branches
+- `b` - Switch branch
 
-- Side-by-side comparison of two text files
-- Line-by-line highlighting of additions, deletions, and changes
-- Inline character-level diff highlighting for changed lines:
-  - Red strikethrough text for removed content
-  - Green text for added content
-- Professional UI with intuitive button placement
-- Accept/reject changes individually or in bulk
-- Save accepted changes back to the original file
+### Git Operations
+- `c` - Commit staged changes (manual message)
+- `g` - **GAC Generate Message** (AI-suggested commit message, no auto-commit)
+- `Ctrl+G` - **Configure GAC** settings
 
-## Usage
+### File Operations
+- Click files to view diffs
+- Use hunk buttons to stage/unstage/discard changes
+- Stage entire files or individual hunks
 
+## 🤖 Setting Up GAC (AI Commits)
+
+1. **Open Tentacle** in your git repository
+2. **Press `Ctrl+G`** to open GAC configuration
+3. **Choose your provider**:
+   - **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
+   - **Anthropic**: Claude-3.5-Sonnet, Claude-3.5-Haiku
+   - **Cerebras**: Qwen3-Coder-480B, Llama-3.1-70B (optimized for code)
+   - **Groq**: Llama-3.3-70B, Mixtral-8x7B (fast & free)
+   - **Ollama**: Local models (llama3.2, qwen2.5, etc.)
+4. **Select a model** from the dropdown
+5. **Enter your API key** (or set up Ollama locally)
+6. **Click Save**
+
+### Example API Key Setup
 ```bash
-tentacle <file1> <file2>
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Cerebras (great for coding!)
+export CEREBRAS_API_KEY="csk-..."
+
+# Groq (free tier available!)
+export GROQ_API_KEY="gsk_..."
+
+# Ollama (local, no API key needed)
+# Just install Ollama and pull models
 ```
 
-Or, if running directly with Python:
+## 🔧 Installation
+
+This project uses **UV** for Python environment management and **Walmart's internal PyPI**.
 
 ```bash
-python -m tentacle <file1> <file2>
-```
+# Clone the repository
+git clone <tentacle-repo>
+cd tentacle
 
-### Controls
-
-- **Accept All**: Accept all changes from file2
-- **Reject All**: Reject all changes (reset all acceptances)
-- **Save Changes**: Save accepted changes to file1
-- **Line-by-line buttons**:
-  - Accept: Accept the change on that line
-  - Reject: Reject the change on that line (if previously accepted)
-  - Undo: Unaccept a previously accepted change
-
-## Inline Diff Highlighting
-
-This version features character-level inline diff highlighting for changed lines:
-
-- Changed lines are displayed with a yellow background
-- Removed text within changed lines appears in red with strikethrough formatting
-- Added text within changed lines appears in green formatting
-- Unchanged lines maintain their original appearance
-
-## UI Improvements
-
-This version features a professional design with:
-
-- Enhanced button placement and styling
-- Improved color scheme for better readability
-- Clear visual indicators for accepted changes
-- Streamlined control panel with intuitive actions
-
-## Requirements
-
-- Python 3.7+
-- textual
-
-## Installation
-
-```bash
-pip install textual
-```
-
-Or, if you have `uv` installed:
-
-```bash
+# Install with UV
 uv sync
+
+# Run the application
+uv run tentacle
 ```
 
-## Example
+## 📦 Dependencies
 
-Using the installed script:
-```bash
-tentacle sample1.txt sample2.txt
-```
+- **textual>=6.1.0** - Modern TUI framework
+- **GitPython>=3.1.42** - Git repository operations
+- **textual-pyfiglet>=1.0.0** - ASCII art logo
+- **gac>=0.18.0** - AI-powered commit message generation
 
-Using uv run:
-```bash
-uv run tentacle sample1.txt sample2.txt
-```
+## 🎯 Workflow Example
 
-Using Python module execution:
-```bash
-python -m tentacle sample1.txt sample2.txt
-```
+1. **Open Tentacle**: `uv run tentacle`
+2. **Make some changes** to your code
+3. **Review diffs** in the center panel
+4. **Stage hunks** by clicking "Stage" buttons
+5. **Press `g`** for AI-generated commit message
+6. **Boom!** 🎉 Professional commit message is generated and filled in—review/edit, then press Commit
 
-The application will display both files side-by-side, with modifications highlighted and accept/reject buttons for each changed line.
+## 🏢 Walmart Integration
+
+This project is configured for **Walmart Global Tech** with:
+- Walmart internal PyPI index support
+- Corporate proxy configuration
+- WCAG 2.2 Level AA compliance for accessibility
+
+## 🔮 What Makes This Special
+
+Tentacle combines the power of a visual git interface with AI-powered commit messages, making it perfect for:
+
+- **Code reviews**: Visual diff inspection with hunk-level control
+- **Professional commits**: AI generates conventional commit messages
+- **Fast workflow**: Stage, review, and commit without leaving the terminal
+- **Team consistency**: Standardized commit message formats
+
+---
+
+**Built with ❤️ by the Walmart Global Tech team**
+
+*"Because managing git shouldn't require a kraken!"* 🐙

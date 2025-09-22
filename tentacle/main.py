@@ -3,12 +3,12 @@ import sys
 from tentacle.git_diff_viewer import GitDiffViewer
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python git_diff_viewer.py <file1> <file2>")
+    # Optional repo path argument
+    repo_path = sys.argv[1] if len(sys.argv) > 1 else None
+    
+    if len(sys.argv) > 2:
+        print("Usage: tentacle [repo_path]")
         sys.exit(1)
 
-    file1_path = sys.argv[1]
-    file2_path = sys.argv[2]
-
-    app = GitDiffViewer(file1_path, file2_path)
+    app = GitDiffViewer(repo_path)
     app.run()
