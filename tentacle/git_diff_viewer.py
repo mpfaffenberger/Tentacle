@@ -131,7 +131,7 @@ class GitDiffViewer(App):
     """A Textual app for viewing git diffs with hunk-based staging in a three-panel UI."""
     
     TITLE = "Tentacle"
-    CSS_PATH = "../style.tcss"
+    CSS_PATH = "style.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("c", "commit", "Commit Staged Changes"),

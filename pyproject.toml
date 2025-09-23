@@ -20,3 +20,6 @@ tentacle = "tentacle.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tentacle"]
+
+[tool.hatch.build.targets.wheel.include]
+files = ["tentacle/style.tcss", "tentacle/smmono9.tlf"]
