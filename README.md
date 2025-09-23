@@ -135,6 +135,6 @@ Tentacle combines the power of a visual git interface with AI-powered commit mes
 
 ---
 
-**Built with ❤️ by the Walmart Global Tech team**
+**Built with ❤️*
 
 *"Because managing git shouldn't require a kraken!"* 🐙
