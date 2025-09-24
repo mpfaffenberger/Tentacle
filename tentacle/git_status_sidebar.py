@@ -6,6 +6,8 @@ import os
 import git
 from dataclasses import dataclass
 from datetime import datetime
+import time
+from functools import lru_cache
 
 # Import for backward compatibility with existing code
 from typing import List as ListType
@@ -54,6 +56,67 @@ class GitStatusSidebar:
         except Exception:
             self.repo = None
             self.repo_path = Path("")
+        
+        # Cache for expensive git operations
+        self._cache = {}
+        self._cache_timestamps = {}
+        self._cache_ttl = 5.0  # Cache TTL in seconds
+        
+        # Track which files were affected by recent operations
+        self._recently_modified_files = set()
+    
+    def _get_cache_key(self, method_name: str, *args) -> str:
+        """Generate cache key for method calls."""
+        return f"{method_name}:{':'.join(map(str, args))}"
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if cache entry is still valid."""
+        if cache_key not in self._cache_timestamps:
+            return False
+        return (time.time() - self._cache_timestamps[cache_key]) < self._cache_ttl
+    
+    def _get_cached(self, cache_key: str):
+        """Get cached value if valid."""
+        if self._is_cache_valid(cache_key):
+            return self._cache.get(cache_key)
+        return None
+    
+    def _set_cache(self, cache_key: str, value):
+        """Set cache value with timestamp."""
+        self._cache[cache_key] = value
+        self._cache_timestamps[cache_key] = time.time()
+    
+    def _invalidate_cache(self, pattern: Optional[str] = None):
+        """Invalidate cache entries matching pattern, or all if pattern is None."""
+        if pattern is None:
+            self._cache.clear()
+            self._cache_timestamps.clear()
+        else:
+            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_remove:
+                self._cache.pop(key, None)
+                self._cache_timestamps.pop(key, None)
+    
+    def _mark_file_modified(self, file_path: str):
+        """Mark a file as recently modified to optimize future updates."""
+        self._recently_modified_files.add(file_path)
+        # Invalidate relevant caches
+        self._invalidate_cache('get_file_statuses')
+        self._invalidate_cache('get_files_with_unstaged_changes')
+        self._invalidate_cache('get_staged_files')
+        self._invalidate_cache('get_file_tree')
+        # Invalidate diff hunks for this specific file
+        self._invalidate_cache(f'get_diff_hunks:{file_path}')
+    
+    def get_recently_modified_files(self) -> set:
+        """Get and clear the set of recently modified files."""
+        modified_files = self._recently_modified_files.copy()
+        self._recently_modified_files.clear()
+        return modified_files
+    
+    def has_recent_modifications(self) -> bool:
+        """Check if there are any recent modifications."""
+        return len(self._recently_modified_files) > 0
             
     def get_file_statuses(self) -> Dict[str, str]:
         """Get git status for tracked files in the repository.
@@ -63,24 +126,34 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return {}
+        
+        cache_key = self._get_cache_key('get_file_statuses')
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         statuses = {}
         
-        # Get staged changes
-        staged_files = self.repo.index.diff("HEAD")
-        for diff in staged_files:
-            statuses[diff.b_path] = "staged"
+        try:
+            # Get staged changes
+            staged_files = self.repo.index.diff("HEAD")
+            for diff in staged_files:
+                statuses[diff.b_path] = "staged"
+                
+            # Get unstaged changes
+            unstaged_files = self.repo.index.diff(None)
+            for diff in unstaged_files:
+                statuses[diff.b_path] = "modified"
+                
+            # Get untracked files
+            untracked_files = self.repo.untracked_files
+            for file_path in untracked_files:
+                statuses[file_path] = "untracked"
+        except Exception:
+            # Return empty dict on error, but don't cache it
+            return {}
             
-        # Get unstaged changes
-        unstaged_files = self.repo.index.diff(None)
-        for diff in unstaged_files:
-            statuses[diff.b_path] = "modified"
-            
-        # Get untracked files
-        untracked_files = self.repo.untracked_files
-        for file_path in untracked_files:
-            statuses[file_path] = "untracked"
-            
+        self._set_cache(cache_key, statuses)
         return statuses
             
     def get_untracked_files(self) -> List[str]:
@@ -102,6 +175,11 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return []
+        
+        cache_key = self._get_cache_key('get_files_with_unstaged_changes')
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         statuses = self.get_file_statuses()
         unstaged_files = []
@@ -109,7 +187,8 @@ class GitStatusSidebar:
         for file_path, status in statuses.items():
             if status in ["modified", "untracked"]:
                 unstaged_files.append(file_path)
-                
+        
+        self._set_cache(cache_key, unstaged_files)
         return unstaged_files
         
     def get_staged_files(self) -> List[str]:
@@ -120,14 +199,17 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return []
-            
-        # Get staged changes
-        staged_files = self.repo.index.diff("HEAD")
-        return [diff.b_path for diff in staged_files]
+        
+        cache_key = self._get_cache_key('get_staged_files')
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         try:
             staged_files = self.repo.index.diff("HEAD")
-            return [diff.b_path for diff in staged_files]
+            result = [diff.b_path for diff in staged_files]
+            self._set_cache(cache_key, result)
+            return result
         except Exception:
             return []
             
@@ -350,6 +432,12 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return []
+        
+        # Check cache first for diff hunks
+        cache_key = self._get_cache_key('get_diff_hunks', file_path, staged)
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         try:
             diff_cmd = ['--', file_path]
@@ -359,23 +447,28 @@ class GitStatusSidebar:
             if not diff:
                 status = self.get_file_status(file_path)
                 if staged:
-                    return []
-                if status == "untracked":
+                    result = []
+                elif status == "untracked":
                     with (self.repo_path / file_path).open('r') as f:
                         content = f.read()
                     lines = ['+' + l for l in content.splitlines()]
-                    return [Hunk("@@ -0,0 +1," + str(len(lines)) + " @@", lines)]
+                    result = [Hunk("@@ -0,0 +1," + str(len(lines)) + " @@", lines)]
                 elif status == "unchanged":
                     with (self.repo_path / file_path).open('r') as f:
                         content = f.read()
                     lines = content.splitlines()
-                    return [Hunk("", lines)]
+                    result = [Hunk("", lines)]
                 else:
-                    return []
-            hunks = self._parse_diff_into_hunks(diff)
-            if file_path.endswith('.md'):
-                hunks = self._filter_whitespace_hunks(hunks)
-            return hunks
+                    result = []
+            else:
+                hunks = self._parse_diff_into_hunks(diff)
+                if file_path.endswith('.md'):
+                    hunks = self._filter_whitespace_hunks(hunks)
+                result = hunks
+            
+            # Cache the result
+            self._set_cache(cache_key, result)
+            return result
         except Exception:
             return []
         
@@ -787,7 +880,10 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk)
-            return self._apply_patch(patch, cached=True)
+            success = self._apply_patch(patch, cached=True)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in stage_hunk: {e}")
             return False
@@ -799,7 +895,10 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk)
-            return self._apply_patch(patch, cached=True, reverse=True)
+            success = self._apply_patch(patch, cached=True, reverse=True)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in unstage_hunk: {e}")
             return False
@@ -811,7 +910,10 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
-            return self._apply_patch(patch)
+            success = self._apply_patch(patch)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in discard_hunk: {e}")
             return False

@@ -614,14 +614,15 @@ class GitDiffViewer(App):
                 if hasattr(self, '_current_displayed_is_staged'):
                     delattr(self, '_current_displayed_is_staged')
                 
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
-                
+                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
+                # instead of doing expensive full repository scans
                 if self.current_file:
                     # Always stay in the current view after staging a hunk
                     # This prevents unwanted view switching when staging individual hunks
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+                
+                # Schedule a background refresh of file trees (non-blocking)
+                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to stage {file_path}", severity="error")
                 
@@ -634,13 +635,16 @@ class GitDiffViewer(App):
             success = self.git_sidebar.stage_file(file_path)
             if success:
                 self.notify(f"Staged all changes in {file_path}", severity="information")
-                # Refresh trees
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
+                
+                # 🐕 PERFORMANCE OPTIMIZATION: Mark file as modified for cache invalidation
+                self.git_sidebar._mark_file_modified(file_path)
+                
                 # If we were viewing this file, switch to staged view for it
                 if self.current_file == file_path:
                     self.display_file_diff(file_path, is_staged=True, force_refresh=True)
+                
+                # Background refresh of trees
+                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to stage all changes in {file_path}", severity="error")
         except Exception as e:
@@ -649,18 +653,18 @@ class GitDiffViewer(App):
     def unstage_hunk(self, file_path: str, hunk_index: int) -> None:
         """Unstage a specific hunk of a file."""
         try:
-            # For this implementation, we'll unstage the entire file
-            # A more advanced implementation would unstage only the specific hunk
             success = self.git_sidebar.unstage_hunk(file_path, hunk_index)
             
             if success:
                 self.notify(f"Unstaged hunk in {file_path}", severity="information")
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
+                
+                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
                 if self.current_file:
                     # Stay in the current view after unstaging a hunk
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+                
+                # Schedule a background refresh of file trees (non-blocking)
+                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to unstage {file_path}", severity="error")
                 
@@ -681,17 +685,35 @@ class GitDiffViewer(App):
                 if hasattr(self, '_current_displayed_is_staged'):
                     delattr(self, '_current_displayed_is_staged')
                 
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
-                
+                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
                 if self.current_file:
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+                
+                # Schedule a background refresh of file trees (non-blocking)
+                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to discard changes in {file_path}", severity="error")
                 
         except Exception as e:
             self.notify(f"Error discarding hunk: {e}", severity="error")
+    
+    def _refresh_trees_async(self) -> None:
+        """Background refresh of file trees to avoid blocking UI during hunk operations."""
+        try:
+            # Check if we have recently modified files to optimize the refresh
+            if self.git_sidebar.has_recent_modifications():
+                modified_files = self.git_sidebar.get_recently_modified_files()
+                # For now, still do full refresh but in background
+                # Future optimization: only update nodes for modified files
+                self.populate_file_tree()
+                self.populate_unstaged_changes()
+                self.populate_staged_changes()
+            else:
+                # No recent changes, skip expensive operations
+                pass
+        except Exception:
+            # Silently fail background operations to avoid disrupting user experience
+            pass
             
     def populate_commit_history(self) -> None:
         """Populate the commit history tab."""
@@ -878,12 +900,16 @@ class GitDiffViewer(App):
                 success = self.git_sidebar.unstage_file(self.current_file)
             if success:
                 self.notify(f"Unstaged all changes in {self.current_file}", severity="information")
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
+                
+                # 🐕 PERFORMANCE OPTIMIZATION: Mark file as modified for cache invalidation
+                self.git_sidebar._mark_file_modified(self.current_file)
+                
                 # If we were viewing this file, show unstaged diff now
                 if self.current_file:
                     self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
+                
+                # Background refresh of trees
+                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to unstage {self.current_file}", severity="error")
         except Exception as e:
