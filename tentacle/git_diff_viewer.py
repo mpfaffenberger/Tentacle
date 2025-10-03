@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional, Dict
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select, TextArea
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
@@ -422,6 +423,7 @@ class GitDiffViewer(App):
             tree.root.expand()
             
             # Get all files in the repository with their statuses
+            file_data = self.git_sidebar.collect_file_data()
             file_tree = self.git_sidebar.get_file_tree()
             
             # Sort file_tree so directories are processed first
@@ -475,11 +477,12 @@ class GitDiffViewer(App):
                 # If we can't even show the error, that's okay - just continue without it
                 pass
 
-    def populate_unstaged_changes(self) -> None:
+    def populate_unstaged_changes(self, file_data: Optional[Dict] = None) -> None:
         """Populate the unstaged changes tree in the right sidebar."""
         if not self.git_sidebar.repo:
             return
             
+        file_data = file_data or self.git_sidebar.collect_file_data()
         try:
             # Get the unstaged tree widget
             tree = self.query_one("#unstaged-tree", Tree)
@@ -490,8 +493,9 @@ class GitDiffViewer(App):
             # Automatically expand the root node
             tree.root.expand()
             
-            # Get unstaged files (modified and untracked)
-            unstaged_files = self.git_sidebar.get_files_with_unstaged_changes()
+            # Use pre-fetched unstaged files
+            unstaged_files = file_data["unstaged_files"]
+            untracked_files = set(file_data["untracked_files"])
             
             # Sort unstaged_files so directories are processed first
             unstaged_files.sort()
@@ -504,11 +508,8 @@ class GitDiffViewer(App):
                 parts = file_path.split('/')
                 file_name = parts[-1]
                 
-                # Determine file status
-                if file_path in self.git_sidebar.get_untracked_files():
-                    status = "untracked"
-                else:
-                    status = "modified"
+                # Determine file status from pre-fetched data
+                status = "untracked" if file_path in untracked_files else "modified"
                 
                 # Build intermediate directory nodes as needed
                 for i in range(len(parts) - 1):
@@ -543,11 +544,12 @@ class GitDiffViewer(App):
             except Exception:
                 pass
 
-    def populate_staged_changes(self) -> None:
+    def populate_staged_changes(self, file_data: Optional[Dict] = None) -> None:
         """Populate the staged changes tree in the right sidebar."""
         if not self.git_sidebar.repo:
             return
             
+        file_data = file_data or self.git_sidebar.collect_file_data()
         try:
             # Get the staged tree widget
             tree = self.query_one("#staged-tree", Tree)
@@ -558,8 +560,8 @@ class GitDiffViewer(App):
             # Automatically expand the root node
             tree.root.expand()
             
-            # Get staged files
-            staged_files = self.git_sidebar.get_staged_files()
+            # Use pre-fetched staged files
+            staged_files = file_data["staged_files"]
             
             # Sort staged_files so directories are processed first
             staged_files.sort()
@@ -614,11 +616,13 @@ class GitDiffViewer(App):
                 if hasattr(self, '_current_displayed_is_staged'):
                     delattr(self, '_current_displayed_is_staged')
                 
-                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
-                # instead of doing expensive full repository scans
+                # Refresh tree states with latest git data
+                file_data = self.git_sidebar.collect_file_data()
+                self.populate_unstaged_changes(file_data)
+                self.populate_staged_changes(file_data)
+                
+                # Refresh only the diff view for the current file
                 if self.current_file:
-                    # Always stay in the current view after staging a hunk
-                    # This prevents unwanted view switching when staging individual hunks
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 
                 # Schedule a background refresh of file trees (non-blocking)
@@ -635,16 +639,9 @@ class GitDiffViewer(App):
             success = self.git_sidebar.stage_file(file_path)
             if success:
                 self.notify(f"Staged all changes in {file_path}", severity="information")
-                
-                # 🐕 PERFORMANCE OPTIMIZATION: Mark file as modified for cache invalidation
-                self.git_sidebar._mark_file_modified(file_path)
-                
-                # If we were viewing this file, switch to staged view for it
-                if self.current_file == file_path:
-                    self.display_file_diff(file_path, is_staged=True, force_refresh=True)
-                
-                # Background refresh of trees
-                self.call_later(self._refresh_trees_async)
+                # Refresh trees
+                # Refresh diff view for the staged file
+                self.display_file_diff(file_path, is_staged=True, force_refresh=True)
             else:
                 self.notify(f"Failed to stage all changes in {file_path}", severity="error")
         except Exception as e:
@@ -658,9 +655,13 @@ class GitDiffViewer(App):
             if success:
                 self.notify(f"Unstaged hunk in {file_path}", severity="information")
                 
-                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
+                # Refresh tree states with latest git data
+                file_data = self.git_sidebar.collect_file_data()
+                self.populate_unstaged_changes(file_data)
+                self.populate_staged_changes(file_data)
+                
+                # Refresh only the diff view for the current file
                 if self.current_file:
-                    # Stay in the current view after unstaging a hunk
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 
                 # Schedule a background refresh of file trees (non-blocking)
@@ -685,7 +686,12 @@ class GitDiffViewer(App):
                 if hasattr(self, '_current_displayed_is_staged'):
                     delattr(self, '_current_displayed_is_staged')
                 
-                # 🐕 PERFORMANCE OPTIMIZATION: Only refresh the current file display
+                # Refresh tree states with latest git data
+                file_data = self.git_sidebar.collect_file_data()
+                self.populate_unstaged_changes(file_data)
+                self.populate_staged_changes(file_data)
+                
+                # Refresh only the diff view
                 if self.current_file:
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 
@@ -850,9 +856,9 @@ class GitDiffViewer(App):
                 commit_input.value = ""
                 commit_body.text = ""
                 # Refresh the UI
-                self.populate_file_tree()
-                self.populate_unstaged_changes()
-                self.populate_staged_changes()
+                # Refresh only the diff view
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 self.populate_commit_history()
             else:
                 self.notify("Failed to commit changes", severity="error")
@@ -900,10 +906,9 @@ class GitDiffViewer(App):
                 success = self.git_sidebar.unstage_file(self.current_file)
             if success:
                 self.notify(f"Unstaged all changes in {self.current_file}", severity="information")
-                
-                # 🐕 PERFORMANCE OPTIMIZATION: Mark file as modified for cache invalidation
-                self.git_sidebar._mark_file_modified(self.current_file)
-                
+                # Refresh only the diff view
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 # If we were viewing this file, show unstaged diff now
                 if self.current_file:
                     self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
