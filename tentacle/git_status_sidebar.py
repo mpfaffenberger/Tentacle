@@ -623,6 +623,65 @@ class GitStatusSidebar:
                 return branches
             except Exception:
                 return []
+
+    def _get_remote_and_branch(self) -> Tuple[str, str]:
+        """Resolve the remote/branch pair for push and pull operations."""
+        if not self.repo:
+            raise ValueError("Not inside a git repository")
+
+        try:
+            if self.repo.head.is_detached:
+                raise ValueError("Detached HEAD state; cannot infer branch")
+        except Exception:
+            raise ValueError("Unable to determine HEAD state")
+
+        active_branch = self.repo.active_branch
+        tracking_branch = active_branch.tracking_branch()
+
+        if tracking_branch is not None:
+            remote_name = tracking_branch.remote_name
+            branch_name = tracking_branch.remote_head or active_branch.name
+        else:
+            remote_name = 'origin'
+            if remote_name not in self.repo.remotes:
+                if not self.repo.remotes:
+                    raise ValueError("No remotes configured")
+                remote_name = self.repo.remotes[0].name
+            branch_name = active_branch.name
+
+        return remote_name, branch_name
+
+    def push_current_branch(self) -> Tuple[bool, str]:
+        """Push the current branch to its remote tracking branch."""
+        if not self.repo:
+            return False, "Not inside a git repository"
+
+        try:
+            remote_name, branch_name = self._get_remote_and_branch()
+            self.repo.git.push(remote_name, branch_name)
+            return True, f"Pushed {branch_name} to {remote_name}"
+        except ValueError as err:
+            return False, str(err)
+        except git.GitCommandError as err:
+            return False, f"Git push failed: {err}"
+        except Exception as err:
+            return False, f"Unexpected push failure: {err}"
+
+    def pull_current_branch(self) -> Tuple[bool, str]:
+        """Pull the latest changes for the current branch."""
+        if not self.repo:
+            return False, "Not inside a git repository"
+
+        try:
+            remote_name, branch_name = self._get_remote_and_branch()
+            self.repo.git.pull(remote_name, branch_name)
+            return True, f"Pulled {branch_name} from {remote_name}"
+        except ValueError as err:
+            return False, str(err)
+        except git.GitCommandError as err:
+            return False, f"Git pull failed: {err}"
+        except Exception as err:
+            return False, f"Unexpected pull failure: {err}"
             
     def is_dirty(self) -> bool:
         """Check if the repository has modified or staged changes.

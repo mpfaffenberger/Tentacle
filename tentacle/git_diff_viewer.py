@@ -142,6 +142,8 @@ class GitDiffViewer(App):
         ("b", "show_branch_switcher", "Switch Branch"),
         ("s", "stage_selected_file", "Stage Selected File"),
         ("u", "unstage_selected_file", "Unstage Selected File"),
+        ("P", "push_changes", "Push"),
+        ("o", "pull_changes", "Pull"),
     ]
     
     def __init__(self, repo_path: str = None):
@@ -871,6 +873,36 @@ class GitDiffViewer(App):
                 
         except Exception as e:
             self.notify(f"Error committing changes: {e}", severity="error")
+
+    def action_push_changes(self) -> None:
+        """Push the current branch to its remote."""
+        try:
+            success, message = self.git_sidebar.push_current_branch()
+            if success:
+                self.notify(f"🚀 {message}", severity="information")
+            else:
+                self.notify(message, severity="error")
+        except Exception as e:
+            self.notify(f"Push blew up: {e}", severity="error")
+
+    def action_pull_changes(self) -> None:
+        """Pull the latest changes for the current branch."""
+        try:
+            success, message = self.git_sidebar.pull_current_branch()
+            if success:
+                self.notify(f"📥 {message}", severity="information")
+                # Refresh trees and history to reflect new changes
+                file_data = self.git_sidebar.collect_file_data()
+                self.populate_file_tree()
+                self.populate_unstaged_changes(file_data)
+                self.populate_staged_changes(file_data)
+                self.populate_commit_history()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+            else:
+                self.notify(message, severity="error")
+        except Exception as e:
+            self.notify(f"Pull imploded: {e}", severity="error")
     
     def action_gac_config(self) -> None:
         """Show GAC configuration modal."""
