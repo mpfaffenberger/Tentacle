@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set, FrozenSet, Iterable
 import re
 import tempfile
 import os
@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 from functools import lru_cache
+from collections import defaultdict
 
 # Import for backward compatibility with existing code
 from typing import List as ListType
@@ -118,11 +119,12 @@ class GitStatusSidebar:
         """Check if there are any recent modifications."""
         return len(self._recently_modified_files) > 0
             
-    def get_file_statuses(self) -> Dict[str, str]:
-        """Get git status for tracked files in the repository.
+    def get_file_statuses(self) -> Dict[str, FrozenSet[str]]:
+        """Get git status flags for files in the repository.
         
         Returns:
-            Dictionary mapping file paths to their git status (modified, staged, etc.)
+            Dictionary mapping file paths to frozen sets of git status flags.
+            Flags include "staged", "modified", and "untracked".
         """
         if not self.repo:
             return {}
@@ -131,30 +133,31 @@ class GitStatusSidebar:
         cached_result = self._get_cached(cache_key)
         if cached_result is not None:
             return cached_result
-            
-        statuses = {}
-        
+
+        statuses: Dict[str, Set[str]] = defaultdict(set)
+
         try:
-            # Get staged changes
-            staged_files = self.repo.index.diff("HEAD")
-            for diff in staged_files:
-                statuses[diff.b_path] = "staged"
-                
-            # Get unstaged changes
-            unstaged_files = self.repo.index.diff(None)
-            for diff in unstaged_files:
-                statuses[diff.b_path] = "modified"
-                
+            # Get staged changes (index vs HEAD)
+            for diff in self.repo.index.diff("HEAD"):
+                statuses[diff.b_path].add("staged")
+
+            # Get unstaged changes (working tree vs index)
+            for diff in self.repo.index.diff(None):
+                statuses[diff.b_path].add("modified")
+
             # Get untracked files
-            untracked_files = self.repo.untracked_files
-            for file_path in untracked_files:
-                statuses[file_path] = "untracked"
+            for file_path in self.repo.untracked_files:
+                statuses[file_path].add("untracked")
         except Exception:
             # Return empty dict on error, but don't cache it
             return {}
-            
-        self._set_cache(cache_key, statuses)
-        return statuses
+
+        frozen_statuses: Dict[str, FrozenSet[str]] = {
+            path: frozenset(flags) for path, flags in statuses.items()
+        }
+
+        self._set_cache(cache_key, frozen_statuses)
+        return frozen_statuses
             
 
         
@@ -194,11 +197,15 @@ class GitStatusSidebar:
             return [diff.b_path for diff in unstaged_files]
         except Exception:
             return []
-            
 
-            
+    def _resolve_primary_status(self, status_flags: Iterable[str]) -> str:
+        """Pick a single status that best represents the file for tree display."""
+        flags = set(status_flags)
+        for candidate in ("staged", "modified", "untracked"):
+            if candidate in flags:
+                return candidate
+        return "unchanged"
 
-        
     def collect_file_data(self) -> Dict[str, any]:
         """Collect consolidated file and directory data for minimal git calls.
         
@@ -219,11 +226,16 @@ class GitStatusSidebar:
             
             # Files from git listing
             tracked_files = self.repo.git.ls_files().splitlines()
-            files = [(f, statuses.get(f, "unchanged")) for f in tracked_files] 
-            
-            # Add untracked files to list explicitly
-            untracked_files = [f for f, status in statuses.items() if status == "untracked"]
-            files.extend([(f, "untracked") for f in untracked_files])
+            files = [
+                (f, self._resolve_primary_status(statuses.get(f, frozenset())))
+                for f in tracked_files
+            ]
+
+            # Add untracked files to list explicitly (not part of tracked files)
+            untracked_files = [
+                f for f, status_flags in statuses.items() if "untracked" in status_flags
+            ]
+            files.extend([(f, "untracked") for f in untracked_files if f not in tracked_files])
             
             # Directories via git ls-tree, more reliable than Path walk fallback
             try:
@@ -239,9 +251,11 @@ class GitStatusSidebar:
             return {
                 "files": files,
                 "directories": directories,
-                "staged_files": [f for f, s in statuses.items() if s == "staged"],
-                "unstaged_files": [f for f, s in statuses.items() if s in ["modified", "untracked"]],
-                "untracked_files": [f for f, s in statuses.items() if s == "untracked"]
+                "staged_files": [f for f, flags in statuses.items() if "staged" in flags],
+                "unstaged_files": [
+                    f for f, flags in statuses.items() if "modified" in flags or "untracked" in flags
+                ],
+                "untracked_files": [f for f, flags in statuses.items() if "untracked" in flags],
             }
         except Exception:
             return {"files": [], "directories": set(), "staged_files": [], "unstaged_files": [], "untracked_files": []}

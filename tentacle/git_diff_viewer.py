@@ -5,7 +5,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select, TextArea
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
-from tentacle.git_status_sidebar import GitStatusSidebar
+from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
 from tentacle.animated_logo import AnimatedLogo
 from tentacle.gac_integration import GACConfigModal, GACIntegration
 from tentacle.diff_markdown import DiffMarkdown, DiffMarkdownConfig
@@ -333,6 +333,11 @@ class GitDiffViewer(App):
             The original file path
         """
         return sanitized_path.replace('__SLASH__', '/').replace('__SPACE__', ' ').replace('__DOT__', '.')
+
+    @staticmethod
+    def _hunk_has_changes(hunk: Hunk) -> bool:
+        """Return True when a hunk contains any staged or unstaged edits."""
+        return any((line and line[:1] in {"+", "-"}) for line in getattr(hunk, "lines", []))
         
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events for hunk operations and commit."""
@@ -786,22 +791,27 @@ class GitDiffViewer(App):
                 markdown_widget.add_class("diff-markdown")
 
                 sanitized_file_path = file_path.replace('/', '__SLASH__').replace(' ', '__SPACE__').replace('.', '__DOT__')
-                if is_staged:
-                    buttons = Horizontal(
-                        Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="unstage-button"),
-                        classes="hunk-buttons"
-                    )
-                else:
-                    buttons = Horizontal(
-                        Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="stage-button"),
-                        Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="discard-button"),
-                        classes="hunk-buttons"
-                    )
+                hunk_children = [hunk_header, markdown_widget]
+
+                if self._hunk_has_changes(hunk):
+                    if is_staged:
+                        hunk_children.append(
+                            Horizontal(
+                                Button("Unstage", id=f"unstage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="unstage-button"),
+                                classes="hunk-buttons",
+                            )
+                        )
+                    else:
+                        hunk_children.append(
+                            Horizontal(
+                                Button("Stage", id=f"stage-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="stage-button"),
+                                Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="discard-button"),
+                                classes="hunk-buttons",
+                            )
+                        )
 
                 hunk_container = Container(
-                    hunk_header,
-                    markdown_widget,
-                    buttons,
+                    *hunk_children,
                     id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}-{refresh_id}",
                     classes="hunk-container",
                 )
