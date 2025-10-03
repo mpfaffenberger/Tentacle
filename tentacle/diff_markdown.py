@@ -7,7 +7,9 @@ from typing import Iterable, List, Optional
 
 from pygments.lexers import get_lexer_for_filename, guess_lexer
 from pygments.util import ClassNotFound
+from textual.content import Content
 from textual.widgets import Markdown
+from textual.widgets._markdown import MarkdownFence
 
 from .git_status_sidebar import Hunk
 
@@ -23,6 +25,41 @@ class DiffMarkdownConfig:
     show_headers: bool = False
 
 
+class DiffMarkdownFence(MarkdownFence):
+    """Fenced code block that decorates diff lines with background highlights."""
+
+    ADDITION_CLASS = ".diff-line--addition"
+    REMOVAL_CLASS = ".diff-line--removal"
+    ADDITION_STYLE = "on rgba(60, 140, 60, 0.45)"
+    REMOVAL_STYLE = "on rgba(175, 60, 60, 0.45)"
+
+    @classmethod
+    def highlight(cls, code: str, language: str) -> Content:
+        """Apply syntax highlighting and add diff-aware line highlights."""
+        content = super().highlight(code, language)
+        if not content:
+            return content
+
+        plain = content.plain
+        if not plain:
+            return content
+
+        cursor = 0
+        for line in plain.splitlines(keepends=True):
+            # Retain the newline so the highlight matches the selection effect.
+            marker = line[:1]
+            if marker == "+" and not line.startswith("+++"):
+                start, end = cursor, cursor + len(line)
+                content = content.stylize(cls.ADDITION_CLASS, start, end)
+                content = content.stylize(cls.ADDITION_STYLE, start, end)
+            elif marker == "-" and not line.startswith("---"):
+                start, end = cursor, cursor + len(line)
+                content = content.stylize(cls.REMOVAL_CLASS, start, end)
+                content = content.stylize(cls.REMOVAL_STYLE, start, end)
+            cursor += len(line)
+        return content
+
+
 class DiffMarkdown(Markdown):
     """Markdown widget specialised for unified diff hunks with syntax highlighting.
 
@@ -31,10 +68,28 @@ class DiffMarkdown(Markdown):
     per-language syntax highlighting by dynamically picking an appropriate lexer.
     """
 
+    BLOCKS = {
+        **Markdown.BLOCKS,
+        "fence": DiffMarkdownFence,
+        "code_block": DiffMarkdownFence,
+    }
+
     DEFAULT_CSS = """
     DiffMarkdown {
         background: transparent;
         border: none;
+        &:dark .diff-line--addition {
+            background: rgb(40, 110, 45);
+        }
+        &:light .diff-line--addition {
+            background: rgb(170, 230, 170);
+        }
+        &:dark .diff-line--removal {
+            background: rgb(145, 40, 40);
+        }
+        &:light .diff-line--removal {
+            background: rgb(240, 150, 150);
+        }
     }
     """
 
