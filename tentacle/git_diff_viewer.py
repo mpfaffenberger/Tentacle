@@ -138,11 +138,11 @@ class GitDiffViewer(App):
         ("c", "commit", "Commit Staged Changes"),
         ("g", "gac_generate", "GAC Generate Message"),
         ("Ctrl+g", "gac_config", "Configure GAC"),
-        ("r", "refresh_branches", "Refresh Branches"),
+        ("r", "refresh_branches", "Refresh"),
         ("b", "show_branch_switcher", "Switch Branch"),
         ("s", "stage_selected_file", "Stage Selected File"),
         ("u", "unstage_selected_file", "Unstage Selected File"),
-        ("P", "push_changes", "Push"),
+        ("p", "push_changes", "Push"),
         ("o", "pull_changes", "Pull"),
     ]
     
@@ -259,9 +259,22 @@ class GitDiffViewer(App):
         self.push_screen(modal)
         
     def action_refresh_branches(self) -> None:
-        """Refresh the branch dropdown menu."""
+        """Refresh all git status components including file trees and commit history."""
+        # Get fresh data from git
+        file_data = self.git_sidebar.collect_file_data()
+        
+        # Refresh all components
+        self.populate_file_tree()
+        self.populate_unstaged_changes(file_data)
+        self.populate_staged_changes(file_data)
         self.populate_branch_dropdown()
-        self.notify("Branch list refreshed", severity="information")
+        self.populate_commit_history()
+        
+        # Also refresh the diff view if a file is currently selected
+        if self.current_file:
+            self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+        
+        self.notify("All git statuses refreshed", severity="information")
         
     def action_quit(self) -> None:
         """Quit the application with a message."""
@@ -410,9 +423,22 @@ class GitDiffViewer(App):
                         event.select.value = current_branch
             
     def action_refresh_branches(self) -> None:
-        """Refresh the branch dropdown menu."""
+        """Refresh all git status components including file trees and commit history."""
+        # Get fresh data from git
+        file_data = self.git_sidebar.collect_file_data()
+        
+        # Refresh all components
+        self.populate_file_tree()
+        self.populate_unstaged_changes(file_data)
+        self.populate_staged_changes(file_data)
         self.populate_branch_dropdown()
-        self.notify("Branch list refreshed", severity="information")
+        self.populate_commit_history()
+        
+        # Also refresh the diff view if a file is currently selected
+        if self.current_file:
+            self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
+        
+        self.notify("All git statuses refreshed", severity="information")
         
     def populate_file_tree(self) -> None:
         """Populate the file tree sidebar with all files and their git status."""
@@ -923,7 +949,17 @@ class GitDiffViewer(App):
             if status == "unchanged":
                 self.notify("Selected file has no changes", severity="information")
                 return
-            self.stage_file(self.current_file)
+            
+            # Perform the staging operation
+            success = self.git_sidebar.stage_file(self.current_file)
+            if success:
+                self.notify(f"Staged all changes in {self.current_file}", severity="information")
+                # Use the comprehensive refresh function
+                self.action_refresh_branches()
+                # Also refresh diff view for the staged file
+                self.display_file_diff(self.current_file, is_staged=True, force_refresh=True)
+            else:
+                self.notify(f"Failed to stage all changes in {self.current_file}", severity="error")
         except Exception as e:
             self.notify(f"Error staging selected file: {e}", severity="error")
 
@@ -937,22 +973,21 @@ class GitDiffViewer(App):
             if status != "staged":
                 self.notify("Selected file is not staged", severity="information")
                 return
+            
+            # Perform the unstaging operation
             if hasattr(self.git_sidebar, 'unstage_file_all') and callable(self.git_sidebar.unstage_file_all):
                 success = self.git_sidebar.unstage_file_all(self.current_file)
             else:
                 # Fallback: remove entire file from index
                 success = self.git_sidebar.unstage_file(self.current_file)
+                
             if success:
                 self.notify(f"Unstaged all changes in {self.current_file}", severity="information")
-                # Refresh only the diff view
-                if self.current_file:
-                    self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
-                # If we were viewing this file, show unstaged diff now
+                # Use the comprehensive refresh function
+                self.action_refresh_branches()
+                # Also refresh diff view to show unstaged changes
                 if self.current_file:
                     self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
-                
-                # Background refresh of trees
-                self.call_later(self._refresh_trees_async)
             else:
                 self.notify(f"Failed to unstage {self.current_file}", severity="error")
         except Exception as e:
