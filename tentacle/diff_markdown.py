@@ -30,8 +30,8 @@ class DiffMarkdownFence(MarkdownFence):
 
     ADDITION_CLASS = ".diff-line--addition"
     REMOVAL_CLASS = ".diff-line--removal"
-    ADDITION_STYLE = "on rgba(60, 140, 60, 0.45)"
-    REMOVAL_STYLE = "on rgba(175, 60, 60, 0.45)"
+    ADDITION_STYLE = "on rgba(0, 212, 170, 0.4)"
+    REMOVAL_STYLE = "on rgba(255, 107, 107, 0.55)"
 
     @classmethod
     def highlight(cls, code: str, language: str) -> Content:
@@ -79,16 +79,16 @@ class DiffMarkdown(Markdown):
         background: transparent;
         border: none;
         &:dark .diff-line--addition {
-            background: rgb(40, 110, 45);
+            background: rgb(0, 150, 120);
         }
         &:light .diff-line--addition {
-            background: rgb(170, 230, 170);
+            background: rgb(200, 255, 240);
         }
         &:dark .diff-line--removal {
-            background: rgb(145, 40, 40);
+            background: rgb(220, 60, 60);
         }
         &:light .diff-line--removal {
-            background: rgb(240, 150, 150);
+            background: rgb(255, 180, 180);
         }
     }
     """
