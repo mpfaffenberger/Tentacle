@@ -855,8 +855,14 @@ class GitDiffViewer(App):
                 # Clear the commit message inputs
                 commit_input.value = ""
                 commit_body.text = ""
-                # Refresh the UI
-                # Refresh only the diff view
+                
+                # Rebuild tree states with latest git data
+                file_data = self.git_sidebar.collect_file_data()
+                self.populate_file_tree()
+                self.populate_unstaged_changes(file_data)
+                self.populate_staged_changes(file_data)
+                
+                # Refresh the diff and commit history views
                 if self.current_file:
                     self.display_file_diff(self.current_file, self.current_is_staged, force_refresh=True)
                 self.populate_commit_history()
