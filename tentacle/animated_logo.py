@@ -13,7 +13,7 @@ class AnimatedLogo(Widget):
         height: 8;
         width: 1fr;
         content-align: center middle;
-        background: #001f3f;
+        background: transparent;
         align: center middle;
     }
     """

@@ -76,7 +76,7 @@ class CustomFiglet(Figlet):
 class FigletWidget(Coloromatic):
     """A FigletWidget that can use any font available to pyfiglet."""
     
-    DEFAULT_CSS = "FigletWidget {width: auto; height: auto; background: #001f3f;}"
+    DEFAULT_CSS = "FigletWidget {width: auto; height: auto; background: transparent;}"
 
     # Get all available fonts dynamically from pyfiglet
     fonts_list: list[str] = ALL_AVAILABLE_FONTS

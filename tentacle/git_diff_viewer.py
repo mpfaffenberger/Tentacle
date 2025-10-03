@@ -5,11 +5,11 @@ from textual.app import App, ComposeResult
 from textual.widgets import Static, Header, Footer, Button, Tree, Label, Input, TabbedContent, TabPane, Select, TextArea
 from textual.containers import Horizontal, Vertical, Container, VerticalScroll
 from textual.widgets.tree import TreeNode
-from tentacle.git_status_sidebar import GitStatusSidebar, Hunk
+from tentacle.git_status_sidebar import GitStatusSidebar
 from tentacle.animated_logo import AnimatedLogo
 from tentacle.gac_integration import GACConfigModal, GACIntegration
+from tentacle.diff_markdown import DiffMarkdown, DiffMarkdownConfig
 from textual.widget import Widget
-from textual.widgets import Static
 from textual.screen import ModalScreen
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
@@ -766,37 +766,25 @@ class GitDiffViewer(App):
                 
             # Generate a unique timestamp for this refresh to avoid ID collisions
             refresh_id = str(int(time.time() * 1000000))  # microsecond timestamp
-            
+
+            repo_root = getattr(self.git_sidebar, "repo_path", Path.cwd())
+            markdown_config = DiffMarkdownConfig(
+                repo_root=repo_root,
+                prefer_diff_language=False,
+                show_headers=False,
+            )
+
             # Display each hunk
             for i, hunk in enumerate(hunks):
-                # Create all the widgets for this hunk first
-                hunk_widgets = [Static(hunk.header, classes="hunk-header")]
-                
-                # Determine if we should apply diff highlighting
-                # Apply highlighting for staged, modified, and untracked files
-                apply_diff_highlighting = True
-                
-                # Add lines to the hunk widgets list
-                for line in hunk.lines:
-                    if apply_diff_highlighting and line:
-                        # Determine line type based on the first character only
-                        if line[:1] == '+':  # Added line
-                            classes = "added"
-                        elif line[:1] == '-':  # Removed line
-                            classes = "removed"
-                        else:
-                            classes = "unchanged"
-                    else:
-                        # Disable highlighting altogether if we're not in a diff
-                        classes = "unchanged"
-                    
-                    # Escape any markup characters in the line content
-                    escaped_line = line.replace('[', r'\[').replace(']', r'\]') if line else ''
-                    line_widget = Static(escaped_line, classes=classes)
-                    hunk_widgets.append(line_widget)
-                
-                # Add appropriate action buttons for the hunk based on file status
-                # Sanitize file path for use in ID (replace invalid characters with reversible encodings)
+                hunk_header = Static(hunk.header, classes="hunk-header")
+
+                markdown_widget = DiffMarkdown(
+                    file_path=file_path,
+                    hunks=[hunk],
+                    config=markdown_config,
+                )
+                markdown_widget.add_class("diff-markdown")
+
                 sanitized_file_path = file_path.replace('/', '__SLASH__').replace(' ', '__SPACE__').replace('.', '__DOT__')
                 if is_staged:
                     buttons = Horizontal(
@@ -809,13 +797,15 @@ class GitDiffViewer(App):
                         Button("Discard", id=f"discard-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="discard-button"),
                         classes="hunk-buttons"
                     )
-                hunk_widgets.append(buttons)
-                
-                # Create the complete container with all widgets
-                # Include file_path and staging status in hunk_container ID to prevent collisions
-                hunk_container = Container(*hunk_widgets, id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}-{refresh_id}", classes="hunk-container")
-                
-                # Mount the complete hunk container
+
+                hunk_container = Container(
+                    hunk_header,
+                    markdown_widget,
+                    buttons,
+                    id=f"{'staged' if is_staged else 'unstaged'}-hunk-{i}-{sanitized_file_path}-{refresh_id}",
+                    classes="hunk-container",
+                )
+
                 diff_content.mount(hunk_container)
                 
         except Exception as e:
