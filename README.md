@@ -105,7 +105,7 @@ uv run tentacle
 
 - **textual>=6.1.0** - Modern TUI framework
 - **GitPython>=3.1.42** - Git repository operations
-- **textual-pyfiglet>=1.0.0** - ASCII art logo
+
 - **gac>=0.18.0** - AI-powered commit message generation
 
 ## 🎯 Workflow Example

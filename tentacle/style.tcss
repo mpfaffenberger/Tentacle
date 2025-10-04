@@ -6,6 +6,14 @@ Screen {
     color: $text;
 }
 
+/* Logo styling */
+AnimatedLogo .logo-text {
+    text-style: bold;
+    color: #bb9af7;
+    text-align: center;
+    margin: 0 0;
+}
+
 Header {
     color: $text;
     background: transparent;
@@ -18,14 +26,14 @@ Header {
     background: transparent;
     color: $text;
     text-style: bold;
-    border-bottom: solid white;
+    border-bottom: solid #6c7086;
     max-height: 2;
 }
 
 #sidebar {
     width: 25%;
     height: 1fr;
-    border: solid white;
+    border: solid #6c7086;
     background: transparent;
     overflow: auto;
 }
@@ -33,7 +41,7 @@ Header {
 #diff-panel {
     width: 50%;
     height: 1fr;
-    border: solid white;
+    border: solid #6c7086;
     background: transparent;
     overflow: auto;
 }
@@ -41,16 +49,15 @@ Header {
 #status-panel {
     width: 25%;
     height: 1fr;
-    border: solid white;
+    border: solid #6c7086;
     background: transparent;
     overflow-y: scroll;
     scrollbar-size: 1 1;
-    scrollbar-color: #003366;
+    scrollbar-color: #9399b2;
 }
 
 #unstaged-panel, #staged-panel {
     height: 33%;
-    border-bottom: solid white;
     background: transparent;
 }
 
@@ -64,7 +71,7 @@ Header {
     background: transparent;
     overflow-y: auto;
     scrollbar-size: 1 1;
-    scrollbar-color: #003366;
+    scrollbar-color: #9399b2;
 }
 
 #file-tree {
@@ -72,7 +79,7 @@ Header {
     background: transparent;
     overflow-y: auto;
     scrollbar-size: 1 1;
-    scrollbar-color: #003366;
+    scrollbar-color: #9399b2;
 }
 
 #diff-content {
@@ -81,9 +88,9 @@ Header {
 }
 
 .diff-markdown {
-    padding: 0 1 1 1;
+    padding: 0;
     background: transparent;
-    border-left: solid #004d80;
+    border: none;
 }
 
 #history-content {
@@ -95,14 +102,14 @@ Header {
 .commit-section {
     layout: vertical;
     width: 100%;
-    border-top: solid white;
+    border-top: solid #6c7086;
     padding: 1;
 }
 
 .commit-input {
     width: 100%;
     height: 3;
-    border: solid white;
+    border: solid #6c7086;
     background: transparent;
     padding: 0 1;
 }
@@ -110,13 +117,13 @@ Header {
 .commit-button {
     width: 100%;
     margin-top: 1;
-    background: $success;
+    background: #9ece6a;
     color: black;
     text-style: bold;
 }
 
 .commit-button:hover {
-    background: $success 60%;
+    background: #9ece6a 60%;
 }
 
 .commit-button:disabled {
@@ -127,14 +134,14 @@ Header {
 /* GAC Configuration Modal Styles */
 .gac-label {
     margin: 1 0 0 0;
-    color: #4fbdba;
+    color: #bb9af7;
     text-style: bold;
 }
 
 .gac-input {
     margin: 1 0;
     width: 100%;
-    border: solid #4fbdba;
+    border: solid #6c7086;
     background: transparent;
     color: white;
     padding: 0 1;
@@ -143,7 +150,7 @@ Header {
 .gac-select {
     margin: 1 0;
     width: 100%;
-    border: solid #4fbdba;
+    border: solid #6c7086;
 }
 
 .gac-buttons {
@@ -164,14 +171,14 @@ Header {
 }
 
 .save-button {
-    background: #4fbdba;
+    background: #bb9af7;
     color: white;
     margin: 0 1;
     text-style: bold;
 }
 
 .save-button:hover {
-    background: #6fccc9;
+    background: #9bb8ff;
 }
 
 .cancel-button {
@@ -209,23 +216,23 @@ Header {
 /* Commit Section Styles */
 .commit-label {
     margin: 0 0 0 0;
-    color: #4fbdba;
+    color: #bb9af7;
     text-style: bold;
     height: 1;
 }
 
 .commit-input {
     margin: 0 0 1 0;
+    border: solid #6c7086;
     background: transparent;
-    border: solid white;
     color: white;
     height: 3;
 }
 
 .commit-body {
     margin: 0 0 1 0;
+    border: solid #6c7086;
     background: transparent;
-    border: solid white;
     color: white;
     height: 6;
     min-height: 6;
@@ -235,19 +242,18 @@ Header {
 
 .commit-button {
     margin: 1 0;
-    background: #4fbdba;
+    background: #bb9af7;
     color: white;
     text-style: bold;
 }
 
 .commit-button:hover {
-    background: #6fccc9;
+    background: #9bb8ff;
 }
 
 .commit-section {
     padding: 1;
-    border-top: solid white;
-    border-bottom: solid white;
+    border-top: solid #6c7086;
 }
 
 
@@ -256,8 +262,8 @@ Header {
 .hunk-container {
     layout: vertical;
     width: 100%;
-    border-bottom: solid white;
-    margin-bottom: 1;
+    border: none;
+    margin: 0;
     height: auto;
 }
 
@@ -265,7 +271,7 @@ Header {
     background: transparent;
     color: $text;
     text-style: bold;
-    padding: 0 1;
+    padding: 0;
 }
 
 /* Tab styling */
@@ -284,7 +290,7 @@ TabbedContent > TabPane {
 }
 
 .added {
-    background: $success 60%;
+    background: #9ece6a 60%;
     color: black;
     width: 100%;
     padding: 0 1;
@@ -292,7 +298,7 @@ TabbedContent > TabPane {
 }
 
 .removed {
-    background: $error 60%;
+    background: #d3869b 60%;
     color: white;
     width: 100%;
     padding: 0 1;
@@ -317,28 +323,28 @@ TabbedContent > TabPane {
     width: 12;
     margin: 0 1;
     height: auto;
-    border: round white;
+    border: solid #6c7086;
     background: transparent;
     color: $text;
     text-style: bold;
 }
 
 .stage-button:hover, .unstage-button:hover {
-    background: $success 60%;
+    background: #9ece6a 60%;
 }
 
 .discard-button {
     width: 12;
     margin: 0 1;
     height: auto;
-    border: round white;
+    border: solid #6c7086;
     background: transparent;
     color: $text;
     text-style: bold;
 }
 
 .discard-button:hover {
-    background: $error 60%;
+    background: #d3869b 60%;
 }
 
 .error {
@@ -373,26 +379,26 @@ Tabs > Tab {
 
 Tabs > Tab.--active {
     background: transparent;
-    border-bottom: solid white;
+    border-bottom: solid #6c7086;
 }
 
 Tabs > Tab:hover {
-    background: #001f3f;
+    background: #9399b2;
 }
 
 /* Git status colors in tree */
 Tree > .modified {
-    color: $warning;
+    color: #a9a1e1;
     text-style: bold;
 }
 
 Tree > .staged {
-    color: $success;
+    color: #9ece6a;
     text-style: bold;
 }
 
 Tree > .untracked {
-    color: $error;
+    color: #a9a1e1;
     text-style: bold;
 }
 
@@ -401,7 +407,7 @@ Tree > .unchanged {
 }
 
 Tree > .directory {
-    color: #003366;
+    color: #bb9af7;
     text-style: bold;
 }
 

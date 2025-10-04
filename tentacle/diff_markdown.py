@@ -21,7 +21,7 @@ class DiffMarkdownConfig:
     repo_root: Path
     wrap: bool = False
     prefer_diff_language: bool = False
-    code_block_theme: str = "monokai"
+    code_block_theme: str = "tokyo-night"
     show_headers: bool = False
 
 
@@ -30,8 +30,8 @@ class DiffMarkdownFence(MarkdownFence):
 
     ADDITION_CLASS = ".diff-line--addition"
     REMOVAL_CLASS = ".diff-line--removal"
-    ADDITION_STYLE = "on rgba(60, 140, 60, 0.45)"
-    REMOVAL_STYLE = "on rgba(175, 60, 60, 0.45)"
+    ADDITION_STYLE = "on rgba(158, 206, 106, 0.45)"
+    REMOVAL_STYLE = "on rgba(140, 74, 126, 0.45)"
 
     @classmethod
     def highlight(cls, code: str, language: str) -> Content:
@@ -79,16 +79,16 @@ class DiffMarkdown(Markdown):
         background: transparent;
         border: none;
         &:dark .diff-line--addition {
-            background: rgb(40, 110, 45);
+            background: rgb(158, 206, 106);
         }
         &:light .diff-line--addition {
-            background: rgb(170, 230, 170);
+            background: rgb(200, 230, 180);
         }
         &:dark .diff-line--removal {
-            background: rgb(145, 40, 40);
+            background: rgb(140, 74, 126);
         }
         &:light .diff-line--removal {
-            background: rgb(240, 150, 150);
+            background: rgb(200, 140, 180);
         }
     }
     """

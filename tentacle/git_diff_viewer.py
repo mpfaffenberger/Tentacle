@@ -49,7 +49,7 @@ class BranchSwitchModal(ModalScreen):
     }
     
     #Container {
-        border: solid white;
+        border: solid #6c7086;
         background: #00122f;
         width: 50%;
         height: 50%;
@@ -59,7 +59,7 @@ class BranchSwitchModal(ModalScreen):
     
     OptionList {
         height: 1fr;
-        border: tall white;
+        border: solid #6c7086;
     }
     """
     
@@ -133,6 +133,7 @@ class GitDiffViewer(App):
     
     TITLE = "Tentacle"
     CSS_PATH = "style.tcss"
+    THEME = "tokyo-night"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("c", "commit", "Commit Staged Changes"),
@@ -480,7 +481,7 @@ class GitDiffViewer(App):
                         if current_path not in directory_nodes:
                             parent_node = directory_nodes[parent_path]
                             new_node = parent_node.add(parts[i], expand=True)
-                            new_node.label.stylize("bold blue")  # Color directories blue
+                            new_node.label.stylize("bold #bb9af7")  # Color directories with accent color
                             directory_nodes[current_path] = new_node
                 
                 # For files, add as leaf node under the appropriate directory
@@ -492,9 +493,9 @@ class GitDiffViewer(App):
                     leaf_node = parent_node.add_leaf(parts[-1], data={"path": file_path, "status": git_status})
                     # Apply specific text colors based on git status
                     if git_status == "staged":
-                        leaf_node.label.stylize("bold green")
+                        leaf_node.label.stylize("bold #9ece6a")
                     elif git_status == "modified":
-                        leaf_node.label.stylize("bold red")
+                        leaf_node.label.stylize("bold #a9a1e1")
                     elif git_status == "untracked":
                         leaf_node.label.stylize("bold purple")
                     else:  # unchanged
@@ -553,7 +554,7 @@ class GitDiffViewer(App):
                     if current_path not in directory_nodes:
                         parent_node = directory_nodes[parent_path]
                         new_node = parent_node.add(parts[i], expand=True)
-                        new_node.label.stylize("bold blue")  # Color directories blue
+                        new_node.label.stylize("bold #bb9af7")  # Color directories with accent color
                         directory_nodes[current_path] = new_node
                 
                 # Add file as leaf node under the appropriate directory
@@ -564,7 +565,7 @@ class GitDiffViewer(App):
                 
                 # Apply styling based on status
                 if status == "modified":
-                    leaf_node.label.stylize("bold red")
+                    leaf_node.label.stylize("bold #a9a1e1")
                 else:  # untracked
                     leaf_node.label.stylize("bold purple")
                 
@@ -616,7 +617,7 @@ class GitDiffViewer(App):
                     if current_path not in directory_nodes:
                         parent_node = directory_nodes[parent_path]
                         new_node = parent_node.add(parts[i], expand=True)
-                        new_node.label.stylize("bold blue")  # Color directories blue
+                        new_node.label.stylize("bold #bb9af7")  # Color directories with accent color
                         directory_nodes[current_path] = new_node
                 
                 # Add file as leaf node under the appropriate directory
@@ -624,7 +625,7 @@ class GitDiffViewer(App):
                 parent_node = directory_nodes[parent_dir_path] if parent_dir_path else tree.root
                 
                 leaf_node = parent_node.add_leaf(file_name, data={"path": file_path, "status": "staged"})
-                leaf_node.label.stylize("bold green")
+                leaf_node.label.stylize("bold #9ece6a")
                 
         except Exception as e:
             # Show error in diff panel

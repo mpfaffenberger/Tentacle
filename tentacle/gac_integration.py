@@ -20,7 +20,7 @@ class GACConfigModal(ModalScreen):
     }
     
     #gac-container {
-        border: solid white;
+        border: solid #6c7086;
         background: #00122f;
         width: 60%;
         height: 70%;
@@ -46,7 +46,7 @@ class GACConfigModal(ModalScreen):
     
     .gac-label {
         margin: 1 0 0 0;
-        color: #4fbdba;
+        color: #bb9af7;
         text-style: bold;
     }
     """

@@ -11,7 +11,6 @@ requires-python = ">=3.12"
 dependencies = [
     "textual>=6.1.0",
     "GitPython>=3.1.42",
-    "textual-pyfiglet>=1.0.0",
     "gac>=0.18.0",
 ]
 
@@ -22,4 +21,4 @@ tentacle = "tentacle.main:main"
 packages = ["tentacle"]
 
 [tool.hatch.build.targets.wheel.include]
-files = ["tentacle/style.tcss", "tentacle/smmono9.tlf"]
+files = ["tentacle/style.tcss"]
