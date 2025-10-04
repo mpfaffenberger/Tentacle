@@ -1,11 +1,14 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set, FrozenSet, Iterable
 import re
 import tempfile
 import os
 import git
 from dataclasses import dataclass
 from datetime import datetime
+import time
+from functools import lru_cache
+from collections import defaultdict
 
 # Import for backward compatibility with existing code
 from typing import List as ListType
@@ -54,63 +57,109 @@ class GitStatusSidebar:
         except Exception:
             self.repo = None
             self.repo_path = Path("")
+        
+        # Cache for expensive git operations
+        self._cache = {}
+        self._cache_timestamps = {}
+        self._cache_ttl = 5.0  # Cache TTL in seconds
+        
+        # Track which files were affected by recent operations
+        self._recently_modified_files = set()
+    
+    def _get_cache_key(self, method_name: str, *args) -> str:
+        """Generate cache key for method calls."""
+        return f"{method_name}:{':'.join(map(str, args))}"
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if cache entry is still valid."""
+        if cache_key not in self._cache_timestamps:
+            return False
+        return (time.time() - self._cache_timestamps[cache_key]) < self._cache_ttl
+    
+    def _get_cached(self, cache_key: str):
+        """Get cached value if valid."""
+        if self._is_cache_valid(cache_key):
+            return self._cache.get(cache_key)
+        return None
+    
+    def _set_cache(self, cache_key: str, value):
+        """Set cache value with timestamp."""
+        self._cache[cache_key] = value
+        self._cache_timestamps[cache_key] = time.time()
+    
+    def _invalidate_cache(self, pattern: Optional[str] = None):
+        """Invalidate cache entries matching pattern, or all if pattern is None."""
+        if pattern is None:
+            self._cache.clear()
+            self._cache_timestamps.clear()
+        else:
+            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_remove:
+                self._cache.pop(key, None)
+                self._cache_timestamps.pop(key, None)
+    
+    def _mark_file_modified(self, file_path: str):
+        """Mark a file as recently modified to optimize future updates."""
+        self._recently_modified_files.add(file_path)
+        # Invalidate relevant caches
+        self._invalidate_cache('get_file_statuses')
+        self._invalidate_cache('get_files_with_unstaged_changes')
+        self._invalidate_cache('get_staged_files')
+        self._invalidate_cache('get_file_tree')
+        # Invalidate diff hunks for this specific file
+        self._invalidate_cache(f'get_diff_hunks:{file_path}')
+    
+    def get_recently_modified_files(self) -> set:
+        """Get and clear the set of recently modified files."""
+        modified_files = self._recently_modified_files.copy()
+        self._recently_modified_files.clear()
+        return modified_files
+    
+    def has_recent_modifications(self) -> bool:
+        """Check if there are any recent modifications."""
+        return len(self._recently_modified_files) > 0
             
-    def get_file_statuses(self) -> Dict[str, str]:
-        """Get git status for tracked files in the repository.
+    def get_file_statuses(self) -> Dict[str, FrozenSet[str]]:
+        """Get git status flags for files in the repository.
         
         Returns:
-            Dictionary mapping file paths to their git status (modified, staged, etc.)
+            Dictionary mapping file paths to frozen sets of git status flags.
+            Flags include "staged", "modified", and "untracked".
         """
         if not self.repo:
             return {}
-            
-        statuses = {}
         
-        # Get staged changes
-        staged_files = self.repo.index.diff("HEAD")
-        for diff in staged_files:
-            statuses[diff.b_path] = "staged"
+        cache_key = self._get_cache_key('get_file_statuses')
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        statuses: Dict[str, Set[str]] = defaultdict(set)
+
+        try:
+            # Get staged changes (index vs HEAD)
+            for diff in self.repo.index.diff("HEAD"):
+                statuses[diff.b_path].add("staged")
+
+            # Get unstaged changes (working tree vs index)
+            for diff in self.repo.index.diff(None):
+                statuses[diff.b_path].add("modified")
+
+            # Get untracked files
+            for file_path in self.repo.untracked_files:
+                statuses[file_path].add("untracked")
+        except Exception:
+            # Return empty dict on error, but don't cache it
+            return {}
+
+        frozen_statuses: Dict[str, FrozenSet[str]] = {
+            path: frozenset(flags) for path, flags in statuses.items()
+        }
+
+        self._set_cache(cache_key, frozen_statuses)
+        return frozen_statuses
             
-        # Get unstaged changes
-        unstaged_files = self.repo.index.diff(None)
-        for diff in unstaged_files:
-            statuses[diff.b_path] = "modified"
-            
-        # Get untracked files
-        untracked_files = self.repo.untracked_files
-        for file_path in untracked_files:
-            statuses[file_path] = "untracked"
-            
-        return statuses
-            
-    def get_untracked_files(self) -> List[str]:
-        """Get list of untracked files in the repository.
-        
-        Returns:
-            List of file paths that are untracked
-        """
-        if not self.repo:
-            return []
-            
-        return self.repo.untracked_files
-        
-    def get_files_with_unstaged_changes(self) -> List[str]:
-        """Get list of files with unstaged changes (modified and untracked).
-        
-        Returns:
-            List of file paths that have unstaged changes
-        """
-        if not self.repo:
-            return []
-            
-        statuses = self.get_file_statuses()
-        unstaged_files = []
-        
-        for file_path, status in statuses.items():
-            if status in ["modified", "untracked"]:
-                unstaged_files.append(file_path)
-                
-        return unstaged_files
+
         
     def get_staged_files(self) -> List[str]:
         """Get list of staged files in the repository.
@@ -120,14 +169,17 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return []
-            
-        # Get staged changes
-        staged_files = self.repo.index.diff("HEAD")
-        return [diff.b_path for diff in staged_files]
+        
+        cache_key = self._get_cache_key('get_staged_files')
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         try:
             staged_files = self.repo.index.diff("HEAD")
-            return [diff.b_path for diff in staged_files]
+            result = [diff.b_path for diff in staged_files]
+            self._set_cache(cache_key, result)
+            return result
         except Exception:
             return []
             
@@ -145,53 +197,69 @@ class GitStatusSidebar:
             return [diff.b_path for diff in unstaged_files]
         except Exception:
             return []
-            
-    def get_files_with_unstaged_changes(self) -> List[str]:
-        """Get a list of files that have unstaged changes.
+
+    def _resolve_primary_status(self, status_flags: Iterable[str]) -> str:
+        """Pick a single status that best represents the file for tree display."""
+        flags = set(status_flags)
+        for candidate in ("staged", "modified", "untracked"):
+            if candidate in flags:
+                return candidate
+        return "unchanged"
+
+    def collect_file_data(self) -> Dict[str, any]:
+        """Collect consolidated file and directory data for minimal git calls.
         
         Returns:
-            List of file paths that have unstaged changes (modified or untracked)
+            Dict containing:
+              - files: List of tuples (file_path, git_status)
+              - directories: Set of directory paths
+              - staged_files: List of staged file paths
+              - unstaged_files: List of modified file paths
+              - untracked_files: List of untracked file paths
         """
         if not self.repo:
-            return []
-            
+            return {"files": [], "directories": set(), "staged_files": [], "unstaged_files": [], "untracked_files": []}
+
         try:
-            # Get modified files
-            unstaged_files = self.repo.index.diff(None)
-            modified_files = [diff.b_path for diff in unstaged_files]
+            # Get file statuses once
+            statuses = self.get_file_statuses()
             
-            # Add untracked files
-            untracked_files = self.repo.untracked_files
+            # Files from git listing
+            tracked_files = self.repo.git.ls_files().splitlines()
+            files = [
+                (f, self._resolve_primary_status(statuses.get(f, frozenset())))
+                for f in tracked_files
+            ]
+
+            # Add untracked files to list explicitly (not part of tracked files)
+            untracked_files = [
+                f for f, status_flags in statuses.items() if "untracked" in status_flags
+            ]
+            files.extend([(f, "untracked") for f in untracked_files if f not in tracked_files])
             
-            # Combine both lists
-            all_unstaged = modified_files + untracked_files
+            # Directories via git ls-tree, more reliable than Path walk fallback
+            try:
+                ls_tree_dirs = self.repo.git.ls_tree("--full-tree", "-d", "--name-only", "HEAD")
+                directories = set(ls_tree_dirs.splitlines()) if ls_tree_dirs else set()
+            except Exception:
+                directories = set()
             
-            # Remove duplicates while preserving order
-            seen = set()
-            result = []
-            for file_path in all_unstaged:
-                if file_path not in seen:
-                    seen.add(file_path)
-                    result.append(file_path)
+            # Always ensure .git paths excluded no matter what
+            files = [(f, s) for f, s in files if '.git' not in f.split('/')]
+            directories = {d for d in directories if '.git' not in d.split('/')}
             
-            return result
+            return {
+                "files": files,
+                "directories": directories,
+                "staged_files": [f for f, flags in statuses.items() if "staged" in flags],
+                "unstaged_files": [
+                    f for f, flags in statuses.items() if "modified" in flags or "untracked" in flags
+                ],
+                "untracked_files": [f for f, flags in statuses.items() if "untracked" in flags],
+            }
         except Exception:
-            return []
-            
-    def get_untracked_files(self) -> List[str]:
-        """Get a list of untracked files.
-        
-        Returns:
-            List of file paths that are untracked
-        """
-        if not self.repo:
-            return []
-            
-        try:
-            return self.repo.untracked_files
-        except Exception:
-            return []
-        
+            return {"files": [], "directories": set(), "staged_files": [], "unstaged_files": [], "untracked_files": []}
+
     def get_file_tree(self) -> List[Tuple[str, str, str]]:
         """Get a flattened list of all files with their git status.
         
@@ -199,144 +267,10 @@ class GitStatusSidebar:
             List of tuples (file_path, file_type, git_status) where file_type is "file" or "directory"
             and git_status is "staged", "modified", "untracked", or "unchanged"
         """
-        if not self.repo:
-            return []
-            
-        try:
-            file_list = []
-            
-            # Check if repo_path exists and is valid
-            if not self.repo_path.exists() or not self.repo:
-                return []
-            
-            # Get all files and directories in the repository
-            try:
-                # Handle root directory items
-                for item in self.repo_path.iterdir():
-                    if not item.exists() or '.git' in item.parts:
-                        continue
-                        
-                    if item.is_dir():
-                        file_list.append((item.name, "directory", "unchanged"))
-                    elif item.is_file():
-                        file_list.append((item.name, "file", "unchanged"))
-                
-                # Walk subdirectories
-                for root, dirs, files in self.repo_path.walk():
-                    # Skip git directory
-                    if '.git' in root.parts:
-                        continue
-                    
-                    # Skip root directory since we already handled it
-                    if root == self.repo_path:
-                        continue
-                        
-                    # Add directories
-                    for dir_name in dirs:
-                        dir_path = (root / dir_name).relative_to(self.repo_path)
-                        file_list.append((str(dir_path), "directory", "unchanged"))
-                        
-                    # Add files
-                    for file_name in files:
-                        file_path = (root / file_name).relative_to(self.repo_path)
-                        file_list.append((str(file_path), "file", "unchanged"))
-            except Exception:
-                pass
-            
-            # Always use git ls-files as the primary approach since it's more reliable
-            # Only use pathlib for directories as a true fallback
-            try:
-                file_list = []
-                
-                # Get all tracked files
-                tracked_files = self.repo.git.ls_files().splitlines()
-                for file_path in tracked_files:
-                    # Only add files that exist and aren't in .git directory
-                    full_path = self.repo_path / file_path
-                    if full_path.exists() and '.git' not in full_path.parts:
-                        file_list.append((file_path, "file", "unchanged"))
-                
-                # Add untracked files
-                untracked_files = self.repo.untracked_files
-                for file_path in untracked_files:
-                    full_path = self.repo_path / file_path
-                    if full_path.exists() and '.git' not in full_path.parts:
-                        file_list.append((file_path, "file", "untracked"))
-                
-                # Add all directories in the repository (but not .git directories)
-                try:
-                    # Use git to get all directories in the repository
-                    ls_tree_dirs = self.repo.git.ls_tree("--full-tree", "-d", "--name-only", "HEAD")
-                    tracked_directories = ls_tree_dirs.splitlines() if ls_tree_dirs else []
-                    
-                    directories = set()
-                    # Add tracked directories
-                    for dir_path in tracked_directories:
-                        if dir_path and '.git' not in dir_path.split('/'):
-                            directories.add(dir_path)
-                    
-                    # Also check for empty directories that might not be in ls-tree but are in the repo
-                    # Only walk the repository root, not into subdirectories like .venv
-                    for item in self.repo_path.iterdir():
-                        if item.is_dir() and '.git' not in item.parts and item.name != '.venv' and item.name != '.pytest_cache' and item.name != 'dist':
-                            directories.add(item.name)
-                    
-                    # Add directories to file_list
-                    for dir_path in directories:
-                        file_list.append((dir_path, "directory", "unchanged"))
-                except Exception:
-                    # If git operations fail, just proceed with files only
-                    pass
-                    
-            except Exception:
-                # If git ls-files fails, use pathlib walk as fallback
-                try:
-                    file_list = []
-                    
-                    # Handle root directory items
-                    for item in self.repo_path.iterdir():
-                        if not item.exists() or '.git' in item.parts:
-                            continue
-                        
-                        if item.is_dir():
-                            file_list.append((item.name, "directory", "unchanged"))
-                        elif item.is_file():
-                            file_list.append((item.name, "file", "unchanged"))
-                    
-                    # Walk subdirectories
-                    for root, dirs, files in self.repo_path.walk():
-                        # Skip git directory
-                        if '.git' in root.parts:
-                            continue
-                        
-                        # Skip root directory since we already handled it
-                        if root == self.repo_path:
-                            continue
-                            
-                        # Add directories
-                        for dir_name in dirs:
-                            dir_path = (root / dir_name).relative_to(self.repo_path)
-                            file_list.append((str(dir_path), "directory", "unchanged"))
-                            
-                        # Add files
-                        for file_name in files:
-                            file_path = (root / file_name).relative_to(self.repo_path)
-                            file_list.append((str(file_path), "file", "unchanged"))
-                except Exception:
-                    return []
-            
-            # Get file statuses
-            statuses = self.get_file_statuses()
-            
-            # Update file list with actual statuses
-            for i, (file_path, file_type, git_status) in enumerate(file_list):
-                if file_type == "file":
-                    actual_status = statuses.get(file_path, "unchanged")
-                    file_list[i] = (file_path, file_type, actual_status)
-                
-            return file_list
-        except Exception:
-            return []
+        file_data = self.collect_file_data()
+        file_entries = [(f_path, "file", status) for f_path, status in file_data["files"]]
+        dir_entries = [(d_path, "directory", "unchanged") for d_path in file_data["directories"]]
+        return sorted(file_entries + dir_entries, key=lambda x: (x[1] != "directory", x[0]))
         
     def get_diff_hunks(self, file_path: str, staged: bool = False) -> List[Hunk]:
         """Get diff hunks for a specific file.
@@ -350,6 +284,12 @@ class GitStatusSidebar:
         """
         if not self.repo:
             return []
+        
+        # Check cache first for diff hunks
+        cache_key = self._get_cache_key('get_diff_hunks', file_path, staged)
+        cached_result = self._get_cached(cache_key)
+        if cached_result is not None:
+            return cached_result
             
         try:
             diff_cmd = ['--', file_path]
@@ -359,23 +299,28 @@ class GitStatusSidebar:
             if not diff:
                 status = self.get_file_status(file_path)
                 if staged:
-                    return []
-                if status == "untracked":
+                    result = []
+                elif status == "untracked":
                     with (self.repo_path / file_path).open('r') as f:
                         content = f.read()
                     lines = ['+' + l for l in content.splitlines()]
-                    return [Hunk("@@ -0,0 +1," + str(len(lines)) + " @@", lines)]
+                    result = [Hunk("@@ -0,0 +1," + str(len(lines)) + " @@", lines)]
                 elif status == "unchanged":
                     with (self.repo_path / file_path).open('r') as f:
                         content = f.read()
                     lines = content.splitlines()
-                    return [Hunk("", lines)]
+                    result = [Hunk("", lines)]
                 else:
-                    return []
-            hunks = self._parse_diff_into_hunks(diff)
-            if file_path.endswith('.md'):
-                hunks = self._filter_whitespace_hunks(hunks)
-            return hunks
+                    result = []
+            else:
+                hunks = self._parse_diff_into_hunks(diff)
+                if file_path.endswith('.md'):
+                    hunks = self._filter_whitespace_hunks(hunks)
+                result = hunks
+            
+            # Cache the result
+            self._set_cache(cache_key, result)
+            return result
         except Exception:
             return []
         
@@ -678,6 +623,65 @@ class GitStatusSidebar:
                 return branches
             except Exception:
                 return []
+
+    def _get_remote_and_branch(self) -> Tuple[str, str]:
+        """Resolve the remote/branch pair for push and pull operations."""
+        if not self.repo:
+            raise ValueError("Not inside a git repository")
+
+        try:
+            if self.repo.head.is_detached:
+                raise ValueError("Detached HEAD state; cannot infer branch")
+        except Exception:
+            raise ValueError("Unable to determine HEAD state")
+
+        active_branch = self.repo.active_branch
+        tracking_branch = active_branch.tracking_branch()
+
+        if tracking_branch is not None:
+            remote_name = tracking_branch.remote_name
+            branch_name = tracking_branch.remote_head or active_branch.name
+        else:
+            remote_name = 'origin'
+            if remote_name not in self.repo.remotes:
+                if not self.repo.remotes:
+                    raise ValueError("No remotes configured")
+                remote_name = self.repo.remotes[0].name
+            branch_name = active_branch.name
+
+        return remote_name, branch_name
+
+    def push_current_branch(self) -> Tuple[bool, str]:
+        """Push the current branch to its remote tracking branch."""
+        if not self.repo:
+            return False, "Not inside a git repository"
+
+        try:
+            remote_name, branch_name = self._get_remote_and_branch()
+            self.repo.git.push(remote_name, branch_name)
+            return True, f"Pushed {branch_name} to {remote_name}"
+        except ValueError as err:
+            return False, str(err)
+        except git.GitCommandError as err:
+            return False, f"Git push failed: {err}"
+        except Exception as err:
+            return False, f"Unexpected push failure: {err}"
+
+    def pull_current_branch(self) -> Tuple[bool, str]:
+        """Pull the latest changes for the current branch."""
+        if not self.repo:
+            return False, "Not inside a git repository"
+
+        try:
+            remote_name, branch_name = self._get_remote_and_branch()
+            self.repo.git.pull(remote_name, branch_name)
+            return True, f"Pulled {branch_name} from {remote_name}"
+        except ValueError as err:
+            return False, str(err)
+        except git.GitCommandError as err:
+            return False, f"Git pull failed: {err}"
+        except Exception as err:
+            return False, f"Unexpected pull failure: {err}"
             
     def is_dirty(self) -> bool:
         """Check if the repository has modified or staged changes.
@@ -787,7 +791,10 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk)
-            return self._apply_patch(patch, cached=True)
+            success = self._apply_patch(patch, cached=True)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in stage_hunk: {e}")
             return False
@@ -799,7 +806,10 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk)
-            return self._apply_patch(patch, cached=True, reverse=True)
+            success = self._apply_patch(patch, cached=True, reverse=True)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in unstage_hunk: {e}")
             return False
@@ -811,10 +821,85 @@ class GitStatusSidebar:
                 return False
             hunk = hunks[hunk_index]
             patch = self._create_patch_from_hunk(file_path, hunk, reverse=True)
-            return self._apply_patch(patch)
+            success = self._apply_patch(patch)
+            if success:
+                self._mark_file_modified(file_path)
+            return success
         except Exception as e:
             print(f"Error in discard_hunk: {e}")
             return False
+    
+    def stage_all_changes(self) -> Tuple[bool, str]:
+        """Stage all unstaged changes in the repository.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.repo:
+            return False, "Not in a git repository"
+            
+        try:
+            # Get all unstaged files (including modified, untracked, and deleted)
+            unstaged_files = self.get_unstaged_files()
+            untracked_files = self.repo.untracked_files
+            
+            files_to_stage = []
+            
+            # Handle regular unstaged files (modified and deleted)
+            for file_path in unstaged_files:
+                files_to_stage.append(file_path)
+            
+            # Handle untracked files
+            for file_path in untracked_files:
+                files_to_stage.append(file_path)
+            
+            if not files_to_stage:
+                return True, "No changes to stage"
+            
+            # Stage all changes using git add --update for modified/deleted and git add for untracked
+            if unstaged_files:
+                # This handles modified and deleted files
+                self.repo.git.add('--update')
+            
+            if untracked_files:
+                # This handles untracked files
+                self.repo.git.add('--', *untracked_files)
+            
+            # Mark all modified files as recently modified
+            for file_path in files_to_stage:
+                self._mark_file_modified(file_path)
+            
+            return True, f"Staged {len(files_to_stage)} files"
+            
+        except Exception as e:
+            return False, f"Failed to stage all changes: {str(e)}"
+    
+    def unstage_all_changes(self) -> Tuple[bool, str]:
+        """Unstage all staged changes in the repository.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.repo:
+            return False, "Not in a git repository"
+            
+        try:
+            staged_files = self.get_staged_files()
+            
+            if not staged_files:
+                return True, "No staged changes to unstage"
+            
+            # Use git reset to unstage all changes
+            self.repo.git.reset('--')
+            
+            # Mark all modified files as recently modified
+            for file_path in staged_files:
+                self._mark_file_modified(file_path)
+            
+            return True, f"Unstaged {len(staged_files)} files"
+            
+        except Exception as e:
+            return False, f"Failed to unstage all changes: {str(e)}"
     
     def get_git_status(self) -> str:
         """Get git status output as string for GAC.

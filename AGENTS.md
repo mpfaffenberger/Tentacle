@@ -12,8 +12,9 @@ Tentacle is a Textual-based TUI (Terminal User Interface) application for viewin
 │   ├── __init__.py
 │   ├── main.py
 │   ├── git_diff_viewer.py
-│   └── git_status_sidebar.py
-├── style.tcss
+│   ├── git_status_sidebar.py
+│   ├── style.tcss
+│   └── smmono9.tlf
 ├── README.md
 ├── pyproject.toml
 └── uv.lock
@@ -49,13 +50,19 @@ Tentacle is a Textual-based TUI (Terminal User Interface) application for viewin
   - Retrieve commit history
   - Handle commit operations
 
-### `style.tcss`
+### `tentacle/style.tcss`
 - **Role**: CSS styling for the Textual application
 - **Responsibilities**:
   - Define colors and styles for the application
   - Style UI components (header, footer, panels, buttons)
   - Define styling for different git status indicators
   - Define styling for diff hunks (added, removed, unchanged lines)
+
+### `tentacle/smmono9.tlf`
+- **Role**: Custom monospace font for ASCII art rendering
+- **Responsibilities**:
+  - Provide a consistent, clean monospace font for the animated logo
+  - Enable high-quality ASCII art text rendering in the TUI
 
 ### `pyproject.toml`
 - **Role**: Project configuration and metadata
