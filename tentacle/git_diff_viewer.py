@@ -108,7 +108,7 @@ class HelpModal(ModalScreen):
 [help-section-title]📁 File Navigation[/help-section-title]
 [help-key]↑/↓[/help-key]           Navigate through files and hunks
 [help-key]Enter[/help-key]         Select file to view diff
-[help-key]Tab[/help-key]           Switch between Diff View and Commit History tabs
+[help-key]Tab[/help-key]           Navigate through UI elements (Shift+Tab to go backwards)
 
 [help-section-title]🔄 Git Operations[/help-section-title]
 [help-key]s[/help-key]             Stage selected file
@@ -128,10 +128,6 @@ class HelpModal(ModalScreen):
 [help-section-title]🤖 AI Integration (GAC)[/help-section-title]
 [help-key]Ctrl+G[/help-key]        Configure GAC (Git Commit Assistant)
 [help-key]g[/help-key]                Generate commit message with AI
-
-[help-section-title]🎯 Hunk Operations[/help-section-title]
-[help-key]Space[/help-key]         Stage/unstage current hunk
-[help-key]d[/help-key]             Discard current hunk
 
 [help-section-title]⚙️ Application[/help-section-title]
 [help-key]h[/help-key]             Show this help modal

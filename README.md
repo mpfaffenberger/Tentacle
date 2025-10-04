@@ -2,6 +2,37 @@
 
 A powerful Textual-based TUI (Terminal User Interface) for viewing and managing git diffs with **AI-powered commit message generation** using GAC (Git Auto Commit).
 
+## ⌨️ Keybindings
+
+### 📁 File Navigation
+- `↑/↓` - Navigate through files and hunks
+- `Enter` - Select file to view diff
+- `Tab` - Navigate through UI elements (use `Shift+Tab` to go backwards)
+
+### 🔄 Git Operations
+- `s` - Stage selected file
+- `u` - Unstage selected file
+- `a` - **Stage ALL unstaged changes**
+- `x` - **Unstage ALL staged changes**
+- `c` - Commit staged changes
+
+### 🌿 Branch Management
+- `b` - Show branch switcher
+- `r` - Refresh branches
+
+### 📡 Remote Operations
+- `p` - Push current branch
+- `o` - Pull latest changes
+
+### 🤖 AI Integration (GAC)
+- `Ctrl+G` - **Configure GAC** (Git Commit Assistant)
+- `g` - **Generate commit message with AI**
+
+### ⚙️ Application
+- `h` - **Show help modal** with all keybindings
+- `r` - Refresh git status and file tree
+- `q` - Quit application
+
 ## ✨ Features
 
 ### Core Git Features
@@ -58,32 +89,23 @@ uv run python -m tentacle.main [repo_path]
 1. **Open Tentacle** in your git repository
 2. **Press `Ctrl+G`** to open GAC configuration
 3. **Choose your provider**:
+   - **Cerebras**: Qwen3-Coder-480B (recommended for code, 1M free tokens/day)
    - **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
    - **Anthropic**: Claude-3.5-Sonnet, Claude-3.5-Haiku
-   - **Cerebras**: Qwen3-Coder-480B, Llama-3.1-70B (optimized for code)
    - **Groq**: Llama-3.3-70B, Mixtral-8x7B (fast & free)
    - **Ollama**: Local models (llama3.2, qwen2.5, etc.)
 4. **Select a model** from the dropdown
-5. **Enter your API key** (or set up Ollama locally)
+5. **Paste your API key** directly into the config modal
 6. **Click Save**
 
-### Example API Key Setup
-```bash
-# OpenAI
-export OPENAI_API_KEY="sk-..."
+### Cerebras: Recommended for GAC
 
-# Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
+Cerebras' Qwen3-Coder-480B model is well-suited for commit message generation:
 
-# Cerebras (great for coding!)
-export CEREBRAS_API_KEY="csk-..."
-
-# Groq (free tier available!)
-export GROQ_API_KEY="gsk_..."
-
-# Ollama (local, no API key needed)
-# Just install Ollama and pull models
-```
+- Free tier with 1 million tokens per day (no credit card required)
+- Optimized specifically for code-related tasks
+- Fast response times
+- Get your API key: https://cloud.cerebras.ai/
 
 ## 🔧 Installation
 
