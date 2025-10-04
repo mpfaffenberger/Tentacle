@@ -829,6 +829,78 @@ class GitStatusSidebar:
             print(f"Error in discard_hunk: {e}")
             return False
     
+    def stage_all_changes(self) -> Tuple[bool, str]:
+        """Stage all unstaged changes in the repository.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.repo:
+            return False, "Not in a git repository"
+            
+        try:
+            # Get all unstaged files (including modified, untracked, and deleted)
+            unstaged_files = self.get_unstaged_files()
+            untracked_files = self.repo.untracked_files
+            
+            files_to_stage = []
+            
+            # Handle regular unstaged files (modified and deleted)
+            for file_path in unstaged_files:
+                files_to_stage.append(file_path)
+            
+            # Handle untracked files
+            for file_path in untracked_files:
+                files_to_stage.append(file_path)
+            
+            if not files_to_stage:
+                return True, "No changes to stage"
+            
+            # Stage all changes using git add --update for modified/deleted and git add for untracked
+            if unstaged_files:
+                # This handles modified and deleted files
+                self.repo.git.add('--update')
+            
+            if untracked_files:
+                # This handles untracked files
+                self.repo.git.add('--', *untracked_files)
+            
+            # Mark all modified files as recently modified
+            for file_path in files_to_stage:
+                self._mark_file_modified(file_path)
+            
+            return True, f"Staged {len(files_to_stage)} files"
+            
+        except Exception as e:
+            return False, f"Failed to stage all changes: {str(e)}"
+    
+    def unstage_all_changes(self) -> Tuple[bool, str]:
+        """Unstage all staged changes in the repository.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.repo:
+            return False, "Not in a git repository"
+            
+        try:
+            staged_files = self.get_staged_files()
+            
+            if not staged_files:
+                return True, "No staged changes to unstage"
+            
+            # Use git reset to unstage all changes
+            self.repo.git.reset('--')
+            
+            # Mark all modified files as recently modified
+            for file_path in staged_files:
+                self._mark_file_modified(file_path)
+            
+            return True, f"Unstaged {len(staged_files)} files"
+            
+        except Exception as e:
+            return False, f"Failed to unstage all changes: {str(e)}"
+    
     def get_git_status(self) -> str:
         """Get git status output as string for GAC.
         

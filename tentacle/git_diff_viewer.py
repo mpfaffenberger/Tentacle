@@ -40,6 +40,119 @@ class GitDiffHistoryTabs(Widget):
 
 
 
+class HelpModal(ModalScreen):
+    """Modal screen for displaying help and keybindings."""
+    
+    DEFAULT_CSS = """
+    HelpModal {
+        align: center middle;
+    }
+    
+    Container {
+        border: solid #6c7086;
+        background: #00122f;
+        width: 80%;
+        height: 90%;
+        max-width: 120;
+        max-height: 50;
+        margin: 1;
+        padding: 0;
+    }
+    
+    VerticalScroll {
+        height: 1fr;
+        border: none;
+        padding: 1 2;
+        min-height: 30;
+    }
+    
+    .help-title {
+        text-align: center;
+        text-style: bold;
+        color: #bb9af7;
+        margin: 0 0 1 0;
+    }
+    
+    .help-section {
+        margin: 1 0;
+    }
+    
+    .help-section-title {
+        text-style: bold;
+        color: #9ece6a;
+        margin: 0 0 1 0;
+    }
+    
+    .help-key {
+        color: #a9a1e1;
+        text-style: bold;
+    }
+    
+    .help-desc {
+        color: #c0caf5;
+    }
+    """
+    
+    def compose(self) -> ComposeResult:
+        """Create the help modal content."""
+        with Container():
+            yield Static("🐶 Tentacle - Keybindings", classes="help-title")
+            with VerticalScroll():
+                yield self._get_help_content()
+            with Horizontal():
+                yield Button("Close", classes="cancel-button")
+    
+    def _get_help_content(self) -> Static:
+        """Generate the help content with all keybindings."""
+        help_text = """
+[help-section-title]📁 File Navigation[/help-section-title]
+[help-key]↑/↓[/help-key]           Navigate through files and hunks
+[help-key]Enter[/help-key]         Select file to view diff
+[help-key]Tab[/help-key]           Switch between Diff View and Commit History tabs
+
+[help-section-title]🔄 Git Operations[/help-section-title]
+[help-key]s[/help-key]             Stage selected file
+[help-key]u[/help-key]             Unstage selected file
+[help-key]a[/help-key]             Stage ALL unstaged changes
+[help-key]x[/help-key]             Unstage ALL staged changes
+[help-key]c[/help-key]             Commit staged changes
+
+[help-section-title]🌿 Branch Management[/help-section-title]
+[help-key]b[/help-key]             Show branch switcher
+[help-key]r[/help-key]             Refresh branches
+
+[help-section-title]📡 Remote Operations[/help-section-title]
+[help-key]p[/help-key]                Push current branch
+[help-key]o[/help-key]                Pull latest changes
+
+[help-section-title]🤖 AI Integration (GAC)[/help-section-title]
+[help-key]Ctrl+G[/help-key]        Configure GAC (Git Commit Assistant)
+[help-key]g[/help-key]                Generate commit message with AI
+
+[help-section-title]🎯 Hunk Operations[/help-section-title]
+[help-key]Space[/help-key]         Stage/unstage current hunk
+[help-key]d[/help-key]             Discard current hunk
+
+[help-section-title]⚙️ Application[/help-section-title]
+[help-key]h[/help-key]             Show this help modal
+[help-key]r[/help-key]             Refresh git status and file tree
+[help-key]q[/help-key]             Quit application
+        """
+        return Static(help_text)
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events."""
+        # Check if this is the close button (any button in this modal is close)
+        self.dismiss()
+    
+    def key(self, event) -> bool:
+        """Handle key events in the modal."""
+        if event.name == "escape":
+            self.dismiss()
+            return True
+        return super().key(event)
+
+
 class BranchSwitchModal(ModalScreen):
     """Modal screen for switching branches."""
     
@@ -139,6 +252,9 @@ class GitDiffViewer(App):
         ("c", "commit", "Commit Staged Changes"),
         ("g", "gac_generate", "GAC Generate Message"),
         ("Ctrl+g", "gac_config", "Configure GAC"),
+        ("h", "show_help", "Show Help"),
+        ("a", "stage_all", "Stage All Changes"),
+        ("x", "unstage_all", "Unstage All Changes"),
         ("r", "refresh_branches", "Refresh"),
         ("b", "show_branch_switcher", "Switch Branch"),
         ("s", "stage_selected_file", "Stage Selected File"),
@@ -359,7 +475,7 @@ class GitDiffViewer(App):
         """Handle button press events for hunk operations and commit."""
         button_id = event.button.id
         
-        if button_id.startswith("stage-hunk-"):
+        if button_id and button_id.startswith("stage-hunk-"):
             # Extract hunk index and file path (ignoring the timestamp at the end)
             parts = button_id.split("-")
             if len(parts) >= 4:
@@ -369,7 +485,7 @@ class GitDiffViewer(App):
                 file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.stage_hunk(file_path, hunk_index)
                 
-        elif button_id.startswith("unstage-hunk-"):
+        elif button_id and button_id.startswith("unstage-hunk-"):
             # Extract hunk index and file path (ignoring the timestamp at the end)
             parts = button_id.split("-")
             if len(parts) >= 4:
@@ -379,7 +495,7 @@ class GitDiffViewer(App):
                 file_path = self._reverse_sanitize_path(sanitized_file_path)
                 self.unstage_hunk(file_path, hunk_index)
                 
-        elif button_id.startswith("discard-hunk-"):
+        elif button_id and button_id.startswith("discard-hunk-"):
             # Extract hunk index and file path (ignoring the timestamp at the end)
             parts = button_id.split("-")
             if len(parts) >= 4:
@@ -947,7 +1063,7 @@ class GitDiffViewer(App):
                 return
             status = self.git_sidebar.get_file_status(self.current_file)
             # Allow staging even if file is partially staged; block only if unchanged
-            if status == "unchanged":
+            if "unchanged" in status:
                 self.notify("Selected file has no changes", severity="information")
                 return
             
@@ -971,7 +1087,7 @@ class GitDiffViewer(App):
                 self.notify("No file selected", severity="warning")
                 return
             status = self.git_sidebar.get_file_status(self.current_file)
-            if status != "staged":
+            if "staged" not in status:
                 self.notify("Selected file is not staged", severity="information")
                 return
             
@@ -993,6 +1109,44 @@ class GitDiffViewer(App):
                 self.notify(f"Failed to unstage {self.current_file}", severity="error")
         except Exception as e:
             self.notify(f"Error unstaging selected file: {e}", severity="error")
+
+    def action_show_help(self) -> None:
+        """Show the help modal with keybindings."""
+        try:
+            help_modal = HelpModal()
+            self.push_screen(help_modal)
+        except Exception as e:
+            self.notify(f"Error showing help: {e}", severity="error")
+    
+    def action_stage_all(self) -> None:
+        """Stage all unstaged changes."""
+        try:
+            success, message = self.git_sidebar.stage_all_changes()
+            if success:
+                self.notify(message, severity="information")
+                # Refresh UI
+                self.populate_file_tree()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, is_staged=True, force_refresh=True)
+            else:
+                self.notify(message, severity="error")
+        except Exception as e:
+            self.notify(f"Error staging all changes: {e}", severity="error")
+    
+    def action_unstage_all(self) -> None:
+        """Unstage all staged changes."""
+        try:
+            success, message = self.git_sidebar.unstage_all_changes()
+            if success:
+                self.notify(message, severity="information")
+                # Refresh UI
+                self.populate_file_tree()
+                if self.current_file:
+                    self.display_file_diff(self.current_file, is_staged=False, force_refresh=True)
+            else:
+                self.notify(message, severity="error")
+        except Exception as e:
+            self.notify(f"Error unstaging all changes: {e}", severity="error")
 
     def action_gac_generate(self) -> None:
         """Generate commit message using GAC and populate the commit message fields (no auto-commit)."""
