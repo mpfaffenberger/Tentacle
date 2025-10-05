@@ -54,22 +54,18 @@ class GACConfigModal(ModalScreen):
     # Common AI providers and their models
     PROVIDERS = {
         "openai": [
-            "gpt-4o",
-            "gpt-4o-mini", 
-            "gpt-4-turbo",
-            "gpt-3.5-turbo"
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-nano",
         ],
         "anthropic": [
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307"
+            "claude-sonnet-4-5-20250929",
+            "claude-3-7-sonnet-20250219",
         ],
         "cerebras": [
             "qwen-3-coder-480b",
-            "llama3.1-70b",
-            "llama3.1-8b"
+            "gpt-oss-120b",
+            "qwen-3-235b-a22b-instruct-2507"
         ],
         "groq": [
             "llama-3.3-70b-versatile",
