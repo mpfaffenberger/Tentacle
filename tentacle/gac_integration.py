@@ -301,7 +301,6 @@ class GACIntegration:
                 processed_diff=diff,
                 one_liner=one_liner,
                 hint=hint,
-                scope=scope
             )
             
             # Generate commit message
