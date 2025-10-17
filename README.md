@@ -139,13 +139,6 @@ uv run tentacle
 5. **Press `g`** for AI-generated commit message
 6. **Boom!** 🎉 Professional commit message is generated and filled in—review/edit, then press Commit
 
-## 🏢 Walmart Integration
-
-This project is configured for **Walmart Global Tech** with:
-- Walmart internal PyPI index support
-- Corporate proxy configuration
-- WCAG 2.2 Level AA compliance for accessibility
-
 ## 🔮 What Makes This Special
 
 Tentacle combines the power of a visual git interface with AI-powered commit messages, making it perfect for:
